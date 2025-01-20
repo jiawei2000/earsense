@@ -22,7 +22,8 @@ class MainActivity : AppCompatActivity() {
 
         val buttonLogin : Button = findViewById(R.id.buttonLogin)
         buttonLogin.setOnClickListener {
-            val intent = Intent(this, MainMenuActivity::class.java)
+//            val intent = Intent(this, MainMenuActivity::class.java)
+            val intent = Intent(this, GestureTrainingActivity::class.java)
             startActivity(intent)
         }
 
