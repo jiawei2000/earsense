@@ -56,7 +56,7 @@
         app:layout_constraintVertical_bias="0.433" />
 
     <Button
-        android:id="@+id/buttonActivity"
+        android:id="@+id/buttonStart"
         android:layout_width="241dp"
         android:layout_height="99dp"
         android:text="Activity Recognition"
