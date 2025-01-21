@@ -38,6 +38,7 @@ class GestureTrainingActivity : AppCompatActivity() {
         viewPager = findViewById(R.id.viewPager)
         val pageAdapter = ScreenSlidePagerAdapter(this)
         viewPager?.adapter = pageAdapter
+        viewPager?.isUserInputEnabled = false
 
         //Next button
         val buttonNext: Button = findViewById(R.id.buttonNext)
