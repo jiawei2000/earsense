@@ -1,4 +1,4 @@
-package com.example.earsense.GestureTrainingPages
+package com.example.earsense.gestureTrainingPages
 
 import android.os.Bundle
 import android.view.LayoutInflater

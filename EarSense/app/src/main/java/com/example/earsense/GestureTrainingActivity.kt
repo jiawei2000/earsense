@@ -11,8 +11,8 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
-import com.example.earsense.GestureTrainingPages.Step1
-import com.example.earsense.GestureTrainingPages.Step2
+import com.example.earsense.gestureTrainingPages.Step1
+import com.example.earsense.gestureTrainingPages.Step2
 import com.google.android.material.appbar.MaterialToolbar
 
 class GestureTrainingActivity : AppCompatActivity() {

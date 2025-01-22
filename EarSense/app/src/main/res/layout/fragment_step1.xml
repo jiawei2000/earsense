@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".GestureTrainingPages.Step1">
+    tools:context=".gestureTrainingPages.Step1">
 
     <ImageView
         android:layout_width="wrap_content"
@@ -52,7 +52,7 @@
         app:layout_constraintHorizontal_bias="0.163"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/textView"
-        app:layout_constraintVertical_bias="0.436" />
+        app:layout_constraintVertical_bias="0.8" />
 
     <Button
         android:id="@+id/buttonStop"
@@ -61,10 +61,18 @@
         android:text="Stop Recording"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.594"
+        app:layout_constraintHorizontal_bias="0.85"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/textView"
-        app:layout_constraintVertical_bias="0.436" />
+        app:layout_constraintVertical_bias="0.8" />
+
+    <com.example.earsense.WaveFormView
+        android:id="@+id/waveformView"
+        android:layout_width="match_parent"
+        android:layout_height="400px"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/textView"
+        app:layout_constraintVertical_bias="0.05" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>
