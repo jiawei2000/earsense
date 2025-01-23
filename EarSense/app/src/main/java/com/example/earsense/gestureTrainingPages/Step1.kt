@@ -9,11 +9,13 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.os.CountDownTimer
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import com.example.earsense.R
@@ -36,7 +38,16 @@ class Step1 : Fragment() {
     var waveFormView: WaveFormView? = null
     var audioManager: AudioManager? = null
 
-    private val outputFilePath = "recorded_audio.pcm"
+    val locationToTap = "forehead"
+
+    var textTimer: TextView? = null
+    var textInstructions: TextView? = null
+
+    var timesToTap: Int? = null
+
+    var countDownTimer: CountDownTimer? = null
+
+    val outputFilePath = "recorded_audio.pcm"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,7 +103,6 @@ class Step1 : Fragment() {
                 audioRecord?.startRecording()
 
                 val audioData = ShortArray(bufferSize)
-//                Log.d("bufferSize", bufferSize.toString());
 
 //                val outputStream = FileOutputStream(outputFilePath)
 
@@ -113,6 +123,9 @@ class Step1 : Fragment() {
                 e.printStackTrace()
             }
         }.start()
+
+        startCountDownTimer()
+
     }
 
     // Stop recording audio
@@ -133,6 +146,20 @@ class Step1 : Fragment() {
         audioManager?.isBluetoothScoOn = false
     }
 
+    private fun startCountDownTimer() {
+        countDownTimer = object : CountDownTimer(((timesToTap!! + 1) * 1000).toLong(), 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                textTimer?.text = "" + millisUntilFinished / 1000
+            }
+
+            override fun onFinish() {
+                textTimer?.text = "Done"
+                stopRecording()
+            }
+        }
+        countDownTimer?.start()
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -144,6 +171,8 @@ class Step1 : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        timesToTap = requireContext().resources.getInteger(R.integer.timesToTap)
+
         // Start recording when the button is clicked
         val buttonStartRecording: Button = getView()?.findViewById(R.id.buttonStart) as Button
         buttonStartRecording.setOnClickListener {
@@ -154,10 +183,21 @@ class Step1 : Fragment() {
         val buttonStopRecording: Button = getView()?.findViewById(R.id.buttonStop) as Button
         buttonStopRecording.setOnClickListener {
             stopRecording()
+            countDownTimer?.cancel()
+            textTimer?.text = "Stopped"
         }
 
         // WaveFormView
         waveFormView = getView()?.findViewById(R.id.waveformView) as WaveFormView
+
+        textTimer = getView()?.findViewById(R.id.textTimer) as TextView
+        textInstructions = getView()?.findViewById(R.id.textInstructions) as TextView
+
+        // Instructions text
+        textInstructions!!.text =
+            "Tap your $locationToTap $timesToTap times at 1 second intervals"
+        // Timer text
+        textTimer!!.text = "Press Start to begin"
     }
 
 }

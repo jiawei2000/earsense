@@ -9,7 +9,7 @@
 
     <ImageView
         android:layout_width="wrap_content"
-        android:layout_height="300dp"
+        android:layout_height="260dp"
         android:src="@drawable/face"
         android:id="@+id/imageView"
         app:layout_constraintEnd_toEndOf="parent"
@@ -19,8 +19,8 @@
         app:layout_constraintVertical_bias="0" />
 
     <ImageView
-        android:layout_width="180sp"
-        android:layout_height="80sp"
+        android:layout_width="130sp"
+        android:layout_height="60sp"
         android:src="@drawable/circle"
         app:layout_constraintBottom_toBottomOf="@id/imageView"
         app:layout_constraintEnd_toEndOf="parent"
@@ -29,49 +29,67 @@
         app:layout_constraintVertical_bias="0.28" />
 
     <TextView
-        android:layout_margin="16dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:id="@+id/textView"
-        android:text="Tap your forehead 10 times at 3 second intervals"
+        android:id="@+id/textInstructions"
+        android:text=""
         android:textSize="25sp"
         android:textAlignment="center"
         android:textColor="@color/black"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/imageView"
+        android:paddingLeft="5dp"
+        android:paddingRight="5dp"
+        />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/textTimer"
+        android:text=""
+        android:textSize="25sp"
+        android:textAlignment="center"
+        android:textColor="@color/red"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/textInstructions"
+        android:paddingLeft="5dp"
+        android:paddingRight="5dp"
+        app:flow_verticalBias="0.1"
         />
 
     <Button
         android:id="@+id/buttonStart"
-        android:layout_width="100dp"
+        android:layout_width="wrap_content"
         android:layout_height="40dp"
-        android:text="Start Recording"
+        android:text="Debug:Start"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.163"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/textView"
-        app:layout_constraintVertical_bias="0.8" />
+        app:layout_constraintTop_toBottomOf="@id/waveformView"
+        app:layout_constraintVertical_bias="0.1" />
 
     <Button
         android:id="@+id/buttonStop"
-        android:layout_width="100dp"
+        android:layout_width="wrap_content"
         android:layout_height="40dp"
-        android:text="Stop Recording"
+        android:text="Debug:Stop"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.85"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/textView"
-        app:layout_constraintVertical_bias="0.8" />
+        app:layout_constraintTop_toBottomOf="@id/waveformView"
+        app:layout_constraintVertical_bias="0.1" />
 
     <com.example.earsense.WaveFormView
         android:id="@+id/waveformView"
         android:layout_width="match_parent"
         android:layout_height="400px"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/textView"
+        app:layout_constraintTop_toBottomOf="@id/textTimer"
         app:layout_constraintVertical_bias="0.05" />
 
 
