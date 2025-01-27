@@ -6,6 +6,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
@@ -20,12 +21,15 @@ import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import com.example.earsense.R
 import com.example.earsense.WaveFormView
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.io.IOException
 
 
 class Step1 : Fragment() {
 
-    val sampleRate = 44100
+    val sampleRate = 16000
     val channelConfig = AudioFormat.CHANNEL_IN_MONO
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
     val audioSource = MediaRecorder.AudioSource.MIC
@@ -39,15 +43,15 @@ class Step1 : Fragment() {
     var audioManager: AudioManager? = null
 
     val locationToTap = "forehead"
+    var timesToTap: Int? = null
 
     var textTimer: TextView? = null
     var textInstructions: TextView? = null
 
-    var timesToTap: Int? = null
-
     var countDownTimer: CountDownTimer? = null
 
-    val outputFilePath = "recorded_audio.pcm"
+    private lateinit var outputFile: File
+    private lateinit var outputStream: FileOutputStream
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,30 +106,39 @@ class Step1 : Fragment() {
 
                 audioRecord?.startRecording()
 
-                val audioData = ShortArray(bufferSize)
-
-//                val outputStream = FileOutputStream(outputFilePath)
+                outputFile = File(requireContext().filesDir, "recorded_audio.pcm")
+                outputStream = FileOutputStream(outputFile)
 
                 while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    val audioData = ShortArray(bufferSize)
+
                     val readResult = audioRecord?.read(audioData, 0, audioData.size)
 
                     if (readResult != null && readResult > 0) {
-//                        outputStream.write(audioData, 0, readResult)
                         //Calculate amplitude
                         val amplitude = audioData.maxOrNull()
-
-//                        Log.d("tester", amplitude.toString());
                         waveFormView!!.addAmplitude(amplitude!!.toFloat())
+
+                        //Save to file
+                        val byteArray = ShortArrayToByteArray(audioData)
+                        outputStream.write(byteArray, 0, readResult * 2) // 2 bytes per sample
                     }
                 }
-//                outputStream.close()
             } catch (e: IOException) {
                 e.printStackTrace()
             }
         }.start()
 
         startCountDownTimer()
+    }
 
+    private fun ShortArrayToByteArray(shortArray: ShortArray): ByteArray {
+        val byteArray = ByteArray(shortArray.size * 2) // 2 bytes per short
+        for (i in shortArray.indices) {
+            byteArray[i * 2] = (shortArray[i].toInt() and 0xFF).toByte()
+            byteArray[i * 2 + 1] = (shortArray[i].toInt() shr 8 and 0xFF).toByte()
+        }
+        return byteArray
     }
 
     // Stop recording audio
@@ -134,6 +147,10 @@ class Step1 : Fragment() {
             audioRecord?.stop()
             audioRecord?.release()
             waveFormView!!.clear()
+            outputStream.flush()
+            outputStream.close()
+            audioManager?.stopBluetoothSco()
+            audioManager?.isBluetoothScoOn = false
         } catch (e: RuntimeException) {
             e.printStackTrace()
         }
@@ -141,9 +158,7 @@ class Step1 : Fragment() {
 
     override fun onStop() {
         super.onStop()
-        stopRecording() // Make sure to stop and release when the activity stops
-        audioManager?.stopBluetoothSco()
-        audioManager?.isBluetoothScoOn = false
+        stopRecording()
     }
 
     private fun startCountDownTimer() {
