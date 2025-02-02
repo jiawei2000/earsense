@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
+import org.jtransforms.fft.FloatFFT_1D
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -24,7 +25,6 @@ class GestureActivity : AppCompatActivity() {
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
 
     private lateinit var audioTrack: AudioTrack
-    private lateinit var inputFile: FileInputStream
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +53,7 @@ class GestureActivity : AppCompatActivity() {
         val filePath = filesDir.absolutePath + "/recorded_audio.pcm"
         val buttonPlayAudio: Button = findViewById(R.id.buttonPlay)
         buttonPlayAudio.setOnClickListener {
-            startPlayback(File(filePath))
+            buttonDebug()
         }
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
@@ -63,8 +63,70 @@ class GestureActivity : AppCompatActivity() {
         }
     }
 
-    fun startPlayback(audioFile: File) {
-        inputFile = FileInputStream(audioFile)
+    fun buttonDebug() {
+        val filePath = filesDir.absolutePath + "/recorded_audio.pcm"
+        //Read file
+        val audioFile = File(filePath)
+        val audioData = readFile(audioFile)
+
+        // Process audioData
+        val windowSize = sampleRate // 1 second window
+        val stepSize = windowSize / 2 // 50% overlap
+
+        val windows = slidingWindow(audioData.toShortArray(), windowSize, stepSize)
+        val segments = mutableListOf<ShortArray>()
+        // log number of windows
+        Log.d("AAAAAAA", "Number of windows: ${windows.size}")
+        for (window in windows) {
+            val segment = extractSegmentAroundPeak(window)
+            segments.add(segment)
+            // Apply low-pass filter
+            val filteredSegment = lowPassFilter(segment, sampleRate, 50.toFloat())
+
+            //Apply FTT to segment
+            // FFT expects FloatArray
+            val floatSegment = filteredSegment.map { it.toFloat() }.toFloatArray()
+
+            // Perform FFT
+            val fft = FloatFFT_1D(floatSegment.size.toLong())
+            fft.realForward(floatSegment)
+
+        }
+
+        //Play a certain segment
+//        playAudio(segments[9].toList())
+        //Play the whole audio
+//        playAudio(audioData)
+    }
+
+    fun readFile(audioFile: File): List<Short> {
+        val minBufferSize = AudioTrack.getMinBufferSize(
+            sampleRate,
+            channelConfig,
+            audioEncoding
+        )
+        val audioData = mutableListOf<Short>()
+        val inputFile = FileInputStream(audioFile)
+        try {
+            val byteArray = ByteArray(minBufferSize)
+
+            var bytesRead: Int
+            while (inputFile.read(byteArray).also { bytesRead = it } != -1) {
+                // Convert byteArray to shortArray for 16-bit data
+                val shortArray = ByteArrayToShortArray(byteArray)
+                // Add short array to audioData
+                audioData.addAll(shortArray.toList())
+            }
+        } catch (e: IOException) {
+            Log.d("GestureActivity", "Error reading audio file: ${e.message}")
+        } finally {
+            inputFile.close()
+
+        }
+        return audioData
+    }
+
+    fun playAudio(audioData: List<Short>) {
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             channelConfig,
@@ -80,32 +142,90 @@ class GestureActivity : AppCompatActivity() {
             AudioTrack.MODE_STREAM
         )
 
+        val shortArray = ShortArray(minBufferSize / 2)
+        val audioStream = audioData.toShortArray()
         audioTrack.play()
 
-        var shortArray = ShortArray(minBufferSize / 2)
-        val byteArray = ByteArray(minBufferSize)
-
         Thread {
-            var bytesRead: Int
             try {
-                while (inputFile.read(byteArray).also { bytesRead = it } != -1
-                ) {
-                    // Convert byteArray to shortArray for 16-bit data
-                    shortArray = ByteArrayToShortArray(byteArray)
-                    audioTrack.write(shortArray, 0, bytesRead / 2)
+                var offset = 0
+                while (offset < audioStream.size) {
+                    val length = minOf(shortArray.size, audioStream.size - offset)
+                    System.arraycopy(audioStream, offset, shortArray, 0, length)
+                    audioTrack.write(shortArray, 0, length)
+                    offset += length
                 }
             } catch (e: IOException) {
                 Log.d("GestureActivity:Playback", e.toString())
             } finally {
-                stopPlayback()
+                stopAudio()
             }
         }.start()
     }
 
-    fun stopPlayback() {
+    fun stopAudio() {
         audioTrack.stop()
         audioTrack.release()
-        inputFile.close()
+    }
+
+    fun slidingWindow(audioData: ShortArray, windowSize: Int, stepSize: Int): List<ShortArray> {
+        val windows = mutableListOf<ShortArray>()
+
+        var start = 0
+        while (start + windowSize <= audioData.size) {
+            // Extract the window
+            val window = audioData.copyOfRange(start, start + windowSize)
+            windows.add(window)
+
+            // Move the window forward by stepSize
+            start += stepSize
+        }
+
+        return windows
+    }
+
+    fun lowPassFilter(input: ShortArray, sampleRate: Int, cutoffFreq: Float): ShortArray {
+        val output = ShortArray(input.size)
+
+        // Calculate alpha (filter coefficient)
+        val dt = 1.0f / sampleRate
+        val rc = 1.0f / (2 * Math.PI.toFloat() * cutoffFreq)
+        val alpha = dt / (rc + dt)
+
+        var previousOutput = 0f
+
+        for (i in input.indices) {
+            val currentInput = input[i].toFloat()
+            val filteredValue = alpha * currentInput + (1 - alpha) * previousOutput
+            output[i] = filteredValue.toInt().toShort()
+            previousOutput = filteredValue
+        }
+
+        return output
+    }
+
+    fun extractSegmentAroundPeak(window: ShortArray): ShortArray {
+        val segmentDuration = 0.4
+        val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
+        val peakIndex = window.indices.maxByOrNull { window[it].toInt() } ?: 0 // Find peak index
+
+        // Calculate segment start and end
+        // extract 0.15 seconds before and 0.25 seconds after the peak
+        var start = peakIndex - (0.15 * sampleRate).toInt()
+        var end = peakIndex + (0.25 * sampleRate).toInt()
+
+        // Handle out-of-bounds cases
+        if (start < 0) {
+            end -= start // Extend end
+            start = 0
+        }
+        if (end > window.size) {
+            start -= (end - window.size) // Extend start
+            end = window.size
+        }
+
+        // Extract the segment
+        return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
     }
 
     private fun ByteArrayToShortArray(byteArray: ByteArray): ShortArray {
