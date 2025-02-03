@@ -14,6 +14,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
 import org.jtransforms.fft.FloatFFT_1D
+import smile.classification.KNN
+import smile.math.distance.EuclideanDistance
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -75,6 +77,10 @@ class GestureActivity : AppCompatActivity() {
 
         val windows = slidingWindow(audioData.toShortArray(), windowSize, stepSize)
         val segments = mutableListOf<ShortArray>()
+
+        val trainingFeatures = mutableListOf<DoubleArray>()
+        val trainingLabels = mutableListOf<Int>()
+
         // log number of windows
         Log.d("AAAAAAA", "Number of windows: ${windows.size}")
         for (window in windows) {
@@ -91,7 +97,22 @@ class GestureActivity : AppCompatActivity() {
             val fft = FloatFFT_1D(floatSegment.size.toLong())
             fft.realForward(floatSegment)
 
+            // Add to training features
+            // Smile KNN Expects DoubleArray
+            val doubleSegment = floatSegment.map { it.toDouble() }.toDoubleArray()
+            trainingFeatures.add(doubleSegment)
+            //Randomly assign label of 1 or 2
+            trainingLabels.add((1..2).random())
+
         }
+
+        // Train the model
+        val model = trainKNNModel(trainingFeatures.toTypedArray(), trainingLabels.toIntArray(), 3)
+
+        // Test the model
+        val testSegment = trainingFeatures[0]
+        val prediction = model?.predict(testSegment)
+        Log.d("AAAAAAA", "Prediction: $prediction")
 
         //Play a certain segment
 //        playAudio(segments[9].toList())
@@ -202,6 +223,10 @@ class GestureActivity : AppCompatActivity() {
         }
 
         return output
+    }
+
+    fun trainKNNModel(features: Array<DoubleArray>, labels: IntArray, k: Int): KNN<DoubleArray>? {
+        return KNN.fit(features, labels, k, EuclideanDistance())
     }
 
     fun extractSegmentAroundPeak(window: ShortArray): ShortArray {
