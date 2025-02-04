@@ -1,4 +1,4 @@
-package com.example.earsense.gestureTrainingPages
+package com.example.earsense
 
 import android.content.Context
 import android.content.pm.PackageManager
@@ -6,7 +6,6 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
-import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
@@ -16,18 +15,17 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
-import com.example.earsense.R
-import com.example.earsense.WaveFormView
 import java.io.File
-import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 
 
-class Step1 : Fragment() {
+class gestureTrainingFragment : Fragment() {
 
     val sampleRate = 16000
     val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -42,7 +40,12 @@ class Step1 : Fragment() {
     var waveFormView: WaveFormView? = null
     var audioManager: AudioManager? = null
 
-    val locationToTap = "forehead"
+    var locationToTap = "null"
+    var verticalBias = "0.0"
+    var horizontalBias = "0.0"
+    var width = "100"
+    var height = "100"
+
     var timesToTap: Int? = null
 
     var textTimer: TextView? = null
@@ -56,13 +59,23 @@ class Step1 : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Get arguments from bundle
+        val args = arguments
+        if (args != null) {
+            locationToTap = args.getString("locationToTap").toString()
+            verticalBias = args.getString("verticalBias").toString()
+            horizontalBias = args.getString("horizontalBias").toString()
+            width = args.getString("width").toString()
+            height = args.getString("height").toString()
+        }
+
         audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         var bluetoothDevice: AudioDeviceInfo? = null
 
         //Select bluetooth earbuds as audio source
         for (device in audioManager!!.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
             //Log all devices
-            Log.d("Device", device.productName.toString())
+//            Log.d("Device", device.productName.toString())
             if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
                 bluetoothDevice = device
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -71,8 +84,6 @@ class Step1 : Fragment() {
                     audioManager!!.startBluetoothSco()
                 }
                 audioManager!!.setBluetoothScoOn(true)
-                //log device
-                Log.d("Device", bluetoothDevice.productName.toString())
                 break
             }
         }
@@ -106,7 +117,18 @@ class Step1 : Fragment() {
 
                 audioRecord?.startRecording()
 
-                outputFile = File(requireContext().filesDir, "recorded_audio.pcm")
+                // Create a directory to store the recorded audio
+                val directory = File(requireContext().filesDir, locationToTap)
+                if (!directory.exists()) {
+                    directory.mkdirs()
+                }
+
+                outputFile = File(requireContext().filesDir, "$locationToTap/recorded_audio.pcm")
+                // Create the file if it doesn't exist
+                if (!outputFile.exists()) {
+                    outputFile.createNewFile() // Create the file if it doesn't exist
+                }
+
                 outputStream = FileOutputStream(outputFile)
 
                 while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -118,6 +140,7 @@ class Step1 : Fragment() {
                         //Calculate amplitude
                         val amplitude = audioData.maxOrNull()
                         waveFormView!!.addAmplitude(amplitude!!.toFloat())
+
 
                         //Save to file
                         val byteArray = ShortArrayToByteArray(audioData)
@@ -180,7 +203,7 @@ class Step1 : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_step1, container, false)
+        return inflater.inflate(R.layout.fragment_gesture_training, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -189,24 +212,33 @@ class Step1 : Fragment() {
         timesToTap = requireContext().resources.getInteger(R.integer.timesToTap)
 
         // Start recording when the button is clicked
-        val buttonStartRecording: Button = getView()?.findViewById(R.id.buttonStart) as Button
+        val buttonStartRecording: Button = view.findViewById(R.id.buttonStart) as Button
         buttonStartRecording.setOnClickListener {
             startRecording()
         }
 
         // Stop recording when the button is clicked
-        val buttonStopRecording: Button = getView()?.findViewById(R.id.buttonStop) as Button
+        val buttonStopRecording: Button = view.findViewById(R.id.buttonStop) as Button
         buttonStopRecording.setOnClickListener {
             stopRecording()
             countDownTimer?.cancel()
             textTimer?.text = "Stopped"
         }
 
-        // WaveFormView
-        waveFormView = getView()?.findViewById(R.id.waveformView) as WaveFormView
+        // Image Circle position and size
+        val imageCircle: ImageView = getView()?.findViewById(R.id.imageCircle) as ImageView
+        val params = imageCircle.layoutParams as ConstraintLayout.LayoutParams
+        params.verticalBias = verticalBias.toFloat()
+        params.horizontalBias = horizontalBias.toFloat()
+        params.width = width.toInt()
+        params.height = height.toInt()
+        imageCircle.layoutParams = params
 
-        textTimer = getView()?.findViewById(R.id.textTimer) as TextView
-        textInstructions = getView()?.findViewById(R.id.textInstructions) as TextView
+        // WaveFormView
+        waveFormView = view.findViewById(R.id.waveformView) as WaveFormView
+
+        textTimer = view.findViewById(R.id.textTimer) as TextView
+        textInstructions = view.findViewById(R.id.textInstructions) as TextView
 
         // Instructions text
         textInstructions!!.text =

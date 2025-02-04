@@ -19,6 +19,7 @@ import smile.math.distance.EuclideanDistance
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.io.ObjectInputStream
 
 class GestureActivity : AppCompatActivity() {
 
@@ -66,58 +67,17 @@ class GestureActivity : AppCompatActivity() {
     }
 
     fun buttonDebug() {
-        val filePath = filesDir.absolutePath + "/recorded_audio.pcm"
-        //Read file
-        val audioFile = File(filePath)
-        val audioData = readFile(audioFile)
+        //Load KNN Model
+        val knnModel = loadKnnModel()
+    }
 
-        // Process audioData
-        val windowSize = sampleRate // 1 second window
-        val stepSize = windowSize / 2 // 50% overlap
-
-        val windows = slidingWindow(audioData.toShortArray(), windowSize, stepSize)
-        val segments = mutableListOf<ShortArray>()
-
-        val trainingFeatures = mutableListOf<DoubleArray>()
-        val trainingLabels = mutableListOf<Int>()
-
-        // log number of windows
-        Log.d("AAAAAAA", "Number of windows: ${windows.size}")
-        for (window in windows) {
-            val segment = extractSegmentAroundPeak(window)
-            segments.add(segment)
-            // Apply low-pass filter
-            val filteredSegment = lowPassFilter(segment, sampleRate, 50.toFloat())
-
-            //Apply FTT to segment
-            // FFT expects FloatArray
-            val floatSegment = filteredSegment.map { it.toFloat() }.toFloatArray()
-
-            // Perform FFT
-            val fft = FloatFFT_1D(floatSegment.size.toLong())
-            fft.realForward(floatSegment)
-
-            // Add to training features
-            // Smile KNN Expects DoubleArray
-            val doubleSegment = floatSegment.map { it.toDouble() }.toDoubleArray()
-            trainingFeatures.add(doubleSegment)
-            //Randomly assign label of 1 or 2
-            trainingLabels.add((1..2).random())
-
+    fun loadKnnModel(): KNN<DoubleArray>? {
+        val file = File(filesDir, "models/knn_model")
+        if (!file.exists()) {
+            Log.d("ERROR: GestureActivity", "KNN Model file not found")
+            return null
         }
-
-        // Train the model
-        val model = trainKNNModel(trainingFeatures.toTypedArray(), trainingLabels.toIntArray(), 3)
-
-        // Test the model
-        val testSegment = trainingFeatures[0]
-        val prediction = model?.predict(testSegment)
-        Log.d("AAAAAAA", "Prediction: $prediction")
-
-        //Play a certain segment
-//        playAudio(segments[9].toList())
-        //Play the whole audio
-//        playAudio(audioData)
+        return ObjectInputStream(FileInputStream(file)).use { it.readObject() as KNN<DoubleArray> }
     }
 
     fun readFile(audioFile: File): List<Short> {
