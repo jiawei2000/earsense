@@ -1,12 +1,15 @@
 package com.example.earsense
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -41,8 +44,10 @@ class GestureActivity : AppCompatActivity() {
     var audioRecord: AudioRecord? = null
     var audioManager: AudioManager? = null
 
-    var waveFormView: WaveFormView? = null
-    var debugTextView: TextView? = null
+    var currentProfile = ""
+
+    lateinit var waveFormView: WaveFormView
+    lateinit var debugTextView: TextView
 
     private lateinit var knnModel: KNN<DoubleArray>
 
@@ -52,6 +57,8 @@ class GestureActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_gestures)
+
+        currentProfile = Utils.getCurrentProfile(this)
 
         val toolBar: MaterialToolbar = findViewById(R.id.materialToolbar)
         setSupportActionBar(toolBar)
@@ -72,7 +79,7 @@ class GestureActivity : AppCompatActivity() {
         }
 
         // Debug Button
-        val filePath = filesDir.absolutePath + "/recorded_audio.pcm"
+        val filePath = filesDir.absolutePath + "/$currentProfile/recorded_audio.pcm"
         val buttonPlayAudio: Button = findViewById(R.id.buttonDebug)
         buttonPlayAudio.setOnClickListener {
             buttonDebug()
@@ -102,6 +109,25 @@ class GestureActivity : AppCompatActivity() {
         // Debug Text View
         debugTextView = findViewById(R.id.textDebug)
 
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        var bluetoothDevice: AudioDeviceInfo? = null
+
+        //Select bluetooth earbuds as audio source
+        for (device in audioManager!!.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            //Log all devices
+//            Log.d("Device", device.productName.toString())
+            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                bluetoothDevice = device
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager!!.setCommunicationDevice(bluetoothDevice)
+                } else {
+                    audioManager!!.startBluetoothSco()
+                }
+                audioManager!!.setBluetoothScoOn(true)
+                break
+            }
+        }
+
     }
 
     fun buttonDebug() {
@@ -117,7 +143,7 @@ class GestureActivity : AppCompatActivity() {
     fun buttonStop() {
         stopRecording()
         // Reset debug text
-        debugTextView!!.text = "Prediction: X"
+        debugTextView.text = "Prediction: X"
     }
 
     override fun onStop() {
@@ -166,7 +192,7 @@ class GestureActivity : AppCompatActivity() {
                     if (readResult != null && readResult > 0) {
                         //Calculate amplitude
                         val amplitude = audioData.maxOrNull()
-                        waveFormView!!.addAmplitude(amplitude!!.toFloat())
+                        waveFormView.addAmplitude(amplitude!!.toFloat())
                         runningAudioData.addAll(audioData.toList())
 
                         // Only process Audio every 1 second
@@ -198,7 +224,7 @@ class GestureActivity : AppCompatActivity() {
 
                             //Update Debug textView
                             runOnUiThread {
-                                debugTextView!!.text = "Prediction: ${predictions}"
+                                debugTextView.text = "Prediction: ${predictions}"
                             }
 
                             //Log Prediction
@@ -219,13 +245,13 @@ class GestureActivity : AppCompatActivity() {
     fun stopRecording() {
         audioRecord?.stop()
         audioRecord?.release()
-        waveFormView!!.clear()
+        waveFormView.clear()
         audioManager?.stopBluetoothSco()
         audioManager?.isBluetoothScoOn = false
     }
 
     fun loadKnnModel(): KNN<DoubleArray>? {
-        val file = File(filesDir, "models/knn_model")
+        val file = File(filesDir, "$currentProfile/models/knn_model")
         if (!file.exists()) {
             Log.d("ERROR: GestureActivity", "KNN Model file not found")
             return null

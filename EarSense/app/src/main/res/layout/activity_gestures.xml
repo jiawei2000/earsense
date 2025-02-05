@@ -84,7 +84,7 @@
         android:layout_height="wrap_content"
         android:paddingLeft="5dp"
         android:paddingRight="5dp"
-        android:text="Predicted output: X"
+        android:text="Prediction: X"
         android:textAlignment="center"
         android:textColor="@color/red"
         android:textSize="25sp"

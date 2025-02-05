@@ -53,12 +53,16 @@ class gestureTrainingFragment : Fragment() {
     var textInstructions: TextView? = null
 
     var countDownTimer: CountDownTimer? = null
+    var currentProfile = ""
 
     private lateinit var outputFile: File
     private lateinit var outputStream: FileOutputStream
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Get current profile
+        currentProfile = Utils.getCurrentProfile(requireContext())
 
         // Get arguments from bundle
         val args = arguments
@@ -120,12 +124,12 @@ class gestureTrainingFragment : Fragment() {
                 audioRecord?.startRecording()
 
                 // Create a directory to store the recorded audio
-                val directory = File(requireContext().filesDir, locationToTap)
+                val directory = File(requireContext().filesDir, "$currentProfile/$locationToTap")
                 if (!directory.exists()) {
                     directory.mkdirs()
                 }
 
-                outputFile = File(requireContext().filesDir, "$locationToTap/recorded_audio.pcm")
+                outputFile = File(requireContext().filesDir, "$currentProfile/$locationToTap/recorded_audio.pcm")
                 // Create the file if it doesn't exist
                 if (!outputFile.exists()) {
                     outputFile.createNewFile() // Create the file if it doesn't exist

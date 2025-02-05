@@ -34,10 +34,15 @@ class GestureTrainingActivity : AppCompatActivity() {
     val channelConfig = AudioFormat.CHANNEL_OUT_MONO
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
 
+    var currentProfile = ""
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_gesture_training)
+
+        // Get current profile
+        currentProfile = Utils.getCurrentProfile(this)
 
         //Tool bar
         val toolBar: MaterialToolbar = findViewById(R.id.materialToolbar)
@@ -100,9 +105,7 @@ class GestureTrainingActivity : AppCompatActivity() {
 
         // Read data from all files and to create training data
         for (location in locations) {
-            val filePath = filesDir.absolutePath + "/$location/recorded_audio.pcm"
-            //Log File path
-            Log.d("AAAAAAA", "File path: $filePath")
+            val filePath = filesDir.absolutePath + "/$currentProfile/$location/recorded_audio.pcm"
             val audioFile = File(filePath)
             val audioData = readFile(audioFile)
 
@@ -134,7 +137,7 @@ class GestureTrainingActivity : AppCompatActivity() {
             }
         }// End of locations for loop
 
-        // Train the model
+
         val model = trainKNNModel(trainingFeatures.toTypedArray(), trainingLabels.toIntArray(), 1)
 
         // Save the model to a file
@@ -145,19 +148,12 @@ class GestureTrainingActivity : AppCompatActivity() {
         for (i in 0 until trainingFeatures.size) {
             val testSegment = trainingFeatures[i]
             //Log test segment
-            val prediction = model?.predict(testSegment)
+            val prediction = model.predict(testSegment)
             if (prediction == trainingLabels[i]) {
                 correctCount++
             }
-            Log.d("AAAAAAA", "Segment: $i, Prediction: $prediction, Actual: ${trainingLabels[i]}")
         }
-        Log.d("BBBBBBB", "Correct Count: $correctCount")
-        Log.d("BBBBBBB", "Accuracy: ${correctCount.toDouble() / trainingFeatures.size}")
-
-
-        // Log number of training features
-        Log.d("BBBBBBB", "Number of training features: ${trainingFeatures.size}")
-
+        Log.d("AAAAAA", "Accuracy: ${correctCount.toDouble() / trainingFeatures.size}")
     }
 
     fun readFile(audioFile: File): List<Short> {
@@ -229,12 +225,12 @@ class GestureTrainingActivity : AppCompatActivity() {
 
     fun saveKNNModel(model: KNN<DoubleArray>) {
         // Create a directory to store models
-        val directory = File(filesDir, "models")
+        val directory = File(filesDir, "$currentProfile/models")
         if (!directory.exists()) {
             directory.mkdirs()
         }
 
-        val file = File(filesDir, "models/knn_model")
+        val file = File(filesDir, "$currentProfile/models/knn_model")
         // Create the file if it doesn't exist
         if (!file.exists()) {
             file.createNewFile() // Create the file if it doesn't exist

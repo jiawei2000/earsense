@@ -22,48 +22,51 @@
         />
 
     <TextView
-        android:id="@+id/text"
+        android:id="@+id/textProfile"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Welcome Jia Wei"
-        android:textSize="70px"
+        android:text="Current Profile:"
+        android:textSize="30dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.1" />
+        app:layout_constraintTop_toBottomOf="@id/materialToolbar"
+        app:layout_constraintVertical_bias="0.05" />
 
     <Button
         android:id="@+id/buttonProfile"
-        android:layout_width="241dp"
-        android:layout_height="99dp"
+        android:layout_width="240dp"
+        android:layout_height="100dp"
+        android:layout_marginTop="55dp"
         android:text="Profile"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.224" />
+        app:layout_constraintTop_toBottomOf="@id/textProfile"
+        app:layout_constraintVertical_bias="0.0" />
 
     <Button
         android:id="@+id/buttonGesture"
-        android:layout_width="241dp"
-        android:layout_height="99dp"
+        android:layout_width="240dp"
+        android:layout_height="100dp"
+        android:layout_marginTop="30dp"
         android:text="Face Gesture"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.433" />
+        app:layout_constraintTop_toBottomOf="@id/buttonProfile"
+        app:layout_constraintVertical_bias="0" />
 
     <Button
         android:id="@+id/buttonStart"
-        android:layout_width="241dp"
-        android:layout_height="99dp"
+        android:layout_width="240dp"
+        android:layout_height="100dp"
+        android:layout_marginTop="30dp"
         android:text="Activity Recognition"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.662" />
+        app:layout_constraintTop_toBottomOf="@id/buttonGesture"
+        app:layout_constraintVertical_bias="0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
