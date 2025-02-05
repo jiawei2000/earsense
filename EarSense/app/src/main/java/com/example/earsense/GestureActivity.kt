@@ -1,14 +1,19 @@
 package com.example.earsense
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioRecord
 import android.media.AudioTrack
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
+import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -24,8 +29,22 @@ import java.io.ObjectInputStream
 class GestureActivity : AppCompatActivity() {
 
     val sampleRate = 16000
-    val channelConfig = AudioFormat.CHANNEL_OUT_MONO
+    val channelConfig = AudioFormat.CHANNEL_IN_MONO
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
+    val audioSource = MediaRecorder.AudioSource.MIC
+    val bufferSize = AudioRecord.getMinBufferSize(
+        sampleRate,
+        channelConfig,
+        audioEncoding
+    )
+
+    var audioRecord: AudioRecord? = null
+    var audioManager: AudioManager? = null
+
+    var waveFormView: WaveFormView? = null
+    var debugTextView: TextView? = null
+
+    private lateinit var knnModel: KNN<DoubleArray>
 
     private lateinit var audioTrack: AudioTrack
 
@@ -52,23 +71,157 @@ class GestureActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // Audio Playback
+        // Debug Button
         val filePath = filesDir.absolutePath + "/recorded_audio.pcm"
-        val buttonPlayAudio: Button = findViewById(R.id.buttonPlay)
+        val buttonPlayAudio: Button = findViewById(R.id.buttonDebug)
         buttonPlayAudio.setOnClickListener {
             buttonDebug()
         }
+
+        // Start Button
+        val buttonStart: Button = findViewById(R.id.buttonStart)
+        buttonStart.setOnClickListener {
+            buttonStart()
+        }
+
+        // Stop Button
+        val buttonStop: Button = findViewById(R.id.buttonStop)
+        buttonStop.setOnClickListener {
+            buttonStop()
+        }
+
+        // Waveform View
+        waveFormView = findViewById(R.id.waveFormView)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+
+        // Debug Text View
+        debugTextView = findViewById(R.id.textDebug)
+
     }
 
     fun buttonDebug() {
+
+    }
+
+    fun buttonStart() {
         //Load KNN Model
-        val knnModel = loadKnnModel()
+        knnModel = loadKnnModel() ?: return
+        startRecording()
+    }
+
+    fun buttonStop() {
+        stopRecording()
+        // Reset debug text
+        debugTextView!!.text = "Prediction: X"
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stopRecording()
+    }
+
+    private fun startRecording() {
+        // Start recording in a separate thread
+        Thread {
+            try {
+                // Request permission to record audio
+                if (ActivityCompat.checkSelfPermission(
+                        this,
+                        android.Manifest.permission.RECORD_AUDIO
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(android.Manifest.permission.RECORD_AUDIO),
+                        1
+                    )
+                }
+
+                audioRecord = AudioRecord(
+                    audioSource,
+                    sampleRate,
+                    channelConfig,
+                    audioEncoding,
+                    bufferSize
+                )
+
+                audioRecord?.startRecording()
+
+                //Log bufferSize
+                Log.d("AAAAAAAA", "Buffer Size: $bufferSize")
+
+                var runningAudioData = mutableListOf<Short>()
+                var predictions = mutableListOf<Int>()
+
+                while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    val audioData = ShortArray(bufferSize)
+
+                    val readResult = audioRecord?.read(audioData, 0, audioData.size)
+
+                    if (readResult != null && readResult > 0) {
+                        //Calculate amplitude
+                        val amplitude = audioData.maxOrNull()
+                        waveFormView!!.addAmplitude(amplitude!!.toFloat())
+                        runningAudioData.addAll(audioData.toList())
+
+                        // Only process Audio every 1 second
+                        if (runningAudioData.size < 32000) {
+                            continue
+                        } else {
+                            //Process Audio
+                            //Extract segment around peak
+                            val segment = extractSegmentAroundPeak(runningAudioData.toShortArray())
+                            //Apply low-pass filter
+                            val filteredSegment = lowPassFilter(segment, sampleRate, 50.toFloat())
+
+                            //Apply FTT to segment
+                            // FFT expects FloatArray
+                            val floatSegment = filteredSegment.map { it.toFloat() }.toFloatArray()
+                            val fft = FloatFFT_1D(floatSegment.size.toLong())
+                            fft.realForward(floatSegment)
+
+                            // Smile KNN Expects DoubleArray
+                            val doubleSegment = floatSegment.map { it.toDouble() }.toDoubleArray()
+
+                            //Predict using AudioData
+                            val prediction = knnModel.predict(doubleSegment)
+                            predictions.add(prediction)
+                            // If predictions more than 5 remove oldest one
+                            if (predictions.size > 5) {
+                                predictions.removeAt(0)
+                            }
+
+                            //Update Debug textView
+                            runOnUiThread {
+                                debugTextView!!.text = "Prediction: ${predictions}"
+                            }
+
+                            //Log Prediction
+                            Log.d("BBBBBBB", "Prediction: ${prediction}")
+                            runningAudioData = mutableListOf<Short>()
+                        }
+
+
+                    }
+                }
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }.start()
+
+    }
+
+    fun stopRecording() {
+        audioRecord?.stop()
+        audioRecord?.release()
+        waveFormView!!.clear()
+        audioManager?.stopBluetoothSco()
+        audioManager?.isBluetoothScoOn = false
     }
 
     fun loadKnnModel(): KNN<DoubleArray>? {

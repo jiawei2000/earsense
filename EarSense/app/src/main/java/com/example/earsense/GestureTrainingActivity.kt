@@ -28,7 +28,7 @@ class GestureTrainingActivity : AppCompatActivity() {
     var viewPager: ViewPager2? = null
 
     // Must match locations in ScreenSlidePagerAdapter
-    val locations = arrayOf("forehead", "left cheek", "right cheek")
+    val locations = arrayOf("forehead", "left cheek", "right cheek", "nothing")
 
     val sampleRate = 16000
     val channelConfig = AudioFormat.CHANNEL_OUT_MONO
@@ -83,7 +83,7 @@ class GestureTrainingActivity : AppCompatActivity() {
         //Disable next button on last page
         viewPager?.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                buttonNext.isEnabled = position != 2
+                buttonNext.isEnabled = position != 3
             }
         })
 
@@ -277,7 +277,7 @@ class GestureTrainingActivity : AppCompatActivity() {
 }
 
 class ScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
-    override fun getItemCount(): Int = 3
+    override fun getItemCount(): Int = 4
 
     override fun createFragment(position: Int): Fragment {
 
@@ -288,6 +288,7 @@ class ScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
         bundle1.putString("horizontalBias", "0.5")
         bundle1.putString("width", "300")
         bundle1.putString("height", "200")
+        bundle1.putString("instruction", "Tap your forehead 20 times at 1 second intervals")
         step1.arguments = bundle1
 
         val step2 = gestureTrainingFragment()
@@ -297,6 +298,7 @@ class ScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
         bundle2.putString("horizontalBias", "0.40")
         bundle2.putString("width", "150")
         bundle2.putString("height", "200")
+        bundle2.putString("instruction", "Tap your left cheek 20 times at 1 second intervals")
         step2.arguments = bundle2
 
         val step3 = gestureTrainingFragment()
@@ -306,12 +308,24 @@ class ScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
         bundle3.putString("horizontalBias", "0.65")
         bundle3.putString("width", "150")
         bundle3.putString("height", "200")
+        bundle3.putString("instruction", "Tap your right cheek 20 times at 1 second intervals")
         step3.arguments = bundle3
+
+        val step4 = gestureTrainingFragment()
+        val bundle4 = Bundle()
+        bundle4.putString("locationToTap", "nothing")
+        bundle4.putString("verticalBias", "0")
+        bundle4.putString("horizontalBias", "0")
+        bundle4.putString("width", "1")
+        bundle4.putString("height", "1")
+        bundle4.putString("instruction", "Do not tap anything for 20 seconds")
+        step4.arguments = bundle4
 
         return when (position) {
             0 -> step1
             1 -> step2
             2 -> step3
+            3 -> step4
             else -> gestureTrainingFragment()
         }
     }

@@ -40,11 +40,12 @@ class gestureTrainingFragment : Fragment() {
     var waveFormView: WaveFormView? = null
     var audioManager: AudioManager? = null
 
-    var locationToTap = "null"
+    var locationToTap = ""
     var verticalBias = "0.0"
     var horizontalBias = "0.0"
     var width = "100"
     var height = "100"
+    var instruction = ""
 
     var timesToTap: Int? = null
 
@@ -67,6 +68,7 @@ class gestureTrainingFragment : Fragment() {
             horizontalBias = args.getString("horizontalBias").toString()
             width = args.getString("width").toString()
             height = args.getString("height").toString()
+            instruction = args.getString("instruction").toString()
         }
 
         audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -241,8 +243,7 @@ class gestureTrainingFragment : Fragment() {
         textInstructions = view.findViewById(R.id.textInstructions) as TextView
 
         // Instructions text
-        textInstructions!!.text =
-            "Tap your $locationToTap $timesToTap times at 1 second intervals"
+        textInstructions!!.text = instruction
         // Timer text
         textTimer!!.text = "Press Start to begin"
     }
