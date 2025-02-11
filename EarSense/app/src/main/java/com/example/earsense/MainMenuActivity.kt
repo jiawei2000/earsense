@@ -45,6 +45,13 @@ class MainMenuActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+        // Breathing Recognition Button
+        val buttonBreathing: Button = findViewById(R.id.buttonBreathing)
+        buttonBreathing.setOnClickListener {
+            val intent = Intent(this, BreathingActivity::class.java)
+            startActivity(intent)
+        }
+
         // Profile TextView
         profileTextView = findViewById(R.id.textProfile)
         profileTextView.text = "Current Profile: " + Utils.getCurrentProfile(this)

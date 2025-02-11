@@ -149,7 +149,6 @@ class StepTrackerActivity : AppCompatActivity() {
                 audioRecord = AudioRecord(
                     audioSource, sampleRate, channelConfig, audioEncoding, bufferSize
                 )
-
                 audioRecord.startRecording()
 
                 var runningAudioData = mutableListOf<Double>()
@@ -193,8 +192,6 @@ class StepTrackerActivity : AppCompatActivity() {
                                 changeIcon("standing")
                             }
                         } else {
-
-
                             for (peak in peaks) {
                                 val timeFromLastPeak = System.currentTimeMillis() - lastPeakTime
                                 val peakAmplitude = runningAudioData[peak]
@@ -246,8 +243,10 @@ class StepTrackerActivity : AppCompatActivity() {
     }
 
     fun stopRecording() {
-        audioRecord.stop()
-        audioRecord.release()
+        if (this::audioRecord.isInitialized) {
+            audioRecord.stop()
+            audioRecord.release()
+        }
     }
 
     fun applyLowPassFilter(

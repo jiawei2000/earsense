@@ -18,6 +18,9 @@
         android:theme="@style/Theme.EarSense"
         tools:targetApi="33">
         <activity
+            android:name=".BreathingActivity"
+            android:exported="false" />
+        <activity
             android:name=".StepTrackerActivity"
             android:exported="false" />
         <activity
