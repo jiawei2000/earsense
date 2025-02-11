@@ -1,6 +1,7 @@
 package com.example.earsense
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
@@ -66,6 +67,19 @@ class BreathingActivity : AppCompatActivity() {
         val stopListeningButton: Button = findViewById(R.id.buttonStop)
         stopListeningButton.setOnClickListener {
             stopRecording()
+        }
+
+        // Train Model Button
+        val trainModelButton: Button = findViewById(R.id.buttonTrainModel)
+        trainModelButton.setOnClickListener {
+            // Go to BreathingTrainingActivity
+            val intent = Intent(this, BreathingTrainingActivity::class.java)
+            startActivity(intent)
+        }
+
+        // Debug Button
+        val debugButton: Button = findViewById(R.id.buttonDebug)
+        debugButton.setOnClickListener {
         }
 
         // WaveFormView
