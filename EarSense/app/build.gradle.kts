@@ -33,6 +33,13 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+    packagingOptions {
+        resources {
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/LICENSE-notice.md"
+        }
+    }
 }
 
 dependencies {
@@ -42,8 +49,13 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.google.material)
-    implementation (libs.jtransform)
-    implementation (libs.smile)
+    implementation(libs.jtransform)
+    implementation(libs.smile)
+    implementation(libs.jdsp) {
+        exclude("org.apache.commons", "commons-math3")
+        exclude("org.apache.maven.surefire", "surefire-api")
+        exclude("org.apache.maven.surefire", "common-java5")
+    }
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

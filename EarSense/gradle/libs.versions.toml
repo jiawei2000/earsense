@@ -12,6 +12,7 @@ constraintlayout = "2.2.0"
 materialVersion = "1.13.0-alpha10"
 jtransform = "3.1"
 smile = "2.6.0"
+jdsp = "3.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -25,6 +26,7 @@ androidx-constraintlayout = { group = "androidx.constraintlayout", name = "const
 google-material = { group = "com.google.android.material", name = "material", version.ref = "materialVersion" }
 jtransform = { group = "com.github.wendykierp", name = "JTransforms", version.ref = "jtransform" }
 smile = { group = "com.github.haifengl", name = "smile-core", version.ref = "smile" }
+jdsp = { group = "com.github.psambit9791", name = "jdsp", version.ref = "jdsp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
