@@ -185,7 +185,7 @@ class StepTrackerActivity : AppCompatActivity() {
                         }
 
                         // Detect peaks and troughs
-                        val peaks = findPeaks(runningAudioData.toDoubleArray(), 0.8)
+                        val peaks = findPeaks(runningAudioData.toDoubleArray(), 0.7)
 
                         if (peaks.size < 2) {
                             runOnUiThread() {
@@ -197,11 +197,11 @@ class StepTrackerActivity : AppCompatActivity() {
                                 val peakAmplitude = runningAudioData[peak]
                                 Log.d("AAAAAAAAA", "Peak: $peakAmplitude, Time: $timeFromLastPeak")
 
-                                if (timeFromLastPeak > 100) {
+                                if (timeFromLastPeak > 5) {
                                     runOnUiThread() {
                                         stepCount++
                                         updateStepCount()
-                                        if (timeFromLastPeak > 1000) {
+                                        if (timeFromLastPeak > 200) {
                                             changeIcon("walking")
                                         } else {
                                             changeIcon("running")
@@ -254,8 +254,8 @@ class StepTrackerActivity : AppCompatActivity() {
     ): DoubleArray {
 
         // Define filter parameters
-        val filterWidth = 5.0  // Filter transition width
-        val rippleValue = 60.0  // Stopband ripple in dB
+        val filterWidth = 4.0
+        val rippleValue = 60.0
         val cutoff = doubleArrayOf(cutoffFreq)  // Cutoff frequency
 
         // Create FIR windowed filter

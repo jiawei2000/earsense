@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
 
 class WaveFormView(context: Context?, attrs: AttributeSet?) : View(context, attrs) {
@@ -33,9 +34,10 @@ class WaveFormView(context: Context?, attrs: AttributeSet?) : View(context, attr
 
     fun addAmplitude(amp: Float) {
 
-        var norm = Math.min(amp.toInt() / 7, 400).toFloat()
-        // normalize a value between 10000 to 160000
-//        var norm = Math.min(amp.toInt() / 10000, 10).toFloat()
+//        var norm = Math.min(amp.toInt() / 7, 600).toFloat()
+        var norm = (amp.toInt() / 20).toFloat()
+        Log.d("BBBBBBB", "amp: $amp, norm: $norm")
+
         amplitudes.add(norm)
 
         spikes.clear()

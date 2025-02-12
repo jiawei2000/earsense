@@ -129,7 +129,10 @@ class gestureTrainingFragment : Fragment() {
                     directory.mkdirs()
                 }
 
-                outputFile = File(requireContext().filesDir, "$currentProfile/$locationToTap/recorded_audio.pcm")
+                outputFile = File(
+                    requireContext().filesDir,
+                    "$currentProfile/$locationToTap/recorded_audio.pcm"
+                )
                 // Create the file if it doesn't exist
                 if (!outputFile.exists()) {
                     outputFile.createNewFile() // Create the file if it doesn't exist
@@ -149,7 +152,7 @@ class gestureTrainingFragment : Fragment() {
 
 
                         //Save to file
-                        val byteArray = ShortArrayToByteArray(audioData)
+                        val byteArray = Utils.shortArrayToByteArray(audioData)
                         outputStream.write(byteArray, 0, readResult * 2) // 2 bytes per sample
                     }
                 }
@@ -159,15 +162,6 @@ class gestureTrainingFragment : Fragment() {
         }.start()
 
         startCountDownTimer()
-    }
-
-    private fun ShortArrayToByteArray(shortArray: ShortArray): ByteArray {
-        val byteArray = ByteArray(shortArray.size * 2) // 2 bytes per short
-        for (i in shortArray.indices) {
-            byteArray[i * 2] = (shortArray[i].toInt() and 0xFF).toByte()
-            byteArray[i * 2 + 1] = (shortArray[i].toInt() shr 8 and 0xFF).toByte()
-        }
-        return byteArray
     }
 
     // Stop recording audio

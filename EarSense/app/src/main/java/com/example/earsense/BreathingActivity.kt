@@ -134,6 +134,8 @@ class BreathingActivity : AppCompatActivity() {
                         val doubleAudioArray = audioData.map { it.toDouble() }.toDoubleArray()
                         val amplitude = doubleAudioArray.maxOrNull() ?: 0.0
                         waveFormView.addAmplitude(amplitude.toFloat())
+
+
                     }
                 }
             } catch (e: IOException) {
