@@ -32,7 +32,8 @@ class MainActivity : AppCompatActivity() {
         // Login Button
         val buttonLogin: Button = findViewById(R.id.buttonLogin)
         buttonLogin.setOnClickListener {
-            val intent = Intent(this, MainMenuActivity::class.java)
+//            val intent = Intent(this, MainMenuActivity::class.java)
+            val intent = Intent(this, BreathingTrainingActivity::class.java)
             startActivity(intent)
         }
 

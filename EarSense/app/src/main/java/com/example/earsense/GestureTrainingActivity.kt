@@ -27,7 +27,7 @@ import java.io.ObjectOutputStream
 class GestureTrainingActivity : AppCompatActivity() {
     var viewPager: ViewPager2? = null
 
-    // Must match locations in ScreenSlidePagerAdapter
+    // Must match locations in GestureScreenSlidePagerAdapter
     val locations = arrayOf("forehead", "left cheek", "right cheek", "nothing")
 
     val sampleRate = 16000
@@ -57,7 +57,7 @@ class GestureTrainingActivity : AppCompatActivity() {
 
         //ViewPager
         viewPager = findViewById(R.id.viewPager)
-        val pageAdapter = ScreenSlidePagerAdapter(this)
+        val pageAdapter = GestureScreenSlidePagerAdapter(this)
         viewPager?.adapter = pageAdapter
         viewPager?.isUserInputEnabled = false
 
@@ -272,7 +272,7 @@ class GestureTrainingActivity : AppCompatActivity() {
     }
 }
 
-class ScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
+class GestureScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
     override fun getItemCount(): Int = 4
 
     override fun createFragment(position: Int): Fragment {
