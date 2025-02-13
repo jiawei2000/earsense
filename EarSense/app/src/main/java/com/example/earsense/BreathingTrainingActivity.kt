@@ -111,6 +111,14 @@ class BreathingTrainingActivity : AppCompatActivity() {
 //                doubleAudioArray, sampleRate.toDouble(), 500.0
 //            )
 
+            // Apply High Pass Filter
+            val filter = PassFilter(500.toFloat(), sampleRate, PassFilter.PassType.Highpass, 1.toFloat())
+            for(i in doubleAudioArray.indices){
+                filter.Update(doubleAudioArray[i].toFloat())
+                doubleAudioArray[i] = filter.getValue().toDouble()
+            }
+
+
             // Divide the audio data into windows of 1 second
             val windows = splitIntoWindows(doubleAudioArray, sampleRate)
 
@@ -139,6 +147,13 @@ class BreathingTrainingActivity : AppCompatActivity() {
         //Log training labels size
         Log.d("AAAAAAA", "Training Labels: ${trainingLabels.size}")
 
+        // Log all training features
+        for (i in 0 until trainingFeatures.size) {
+            // sort then log top 5 values of each segment
+            val sortedSegment = trainingFeatures[i].sortedArrayDescending()
+            Log.d("AAAAAAA", "Segment $i: ${sortedSegment.sliceArray(0 until 5).contentToString()}")
+        }
+
         // Train the model
         val model = trainKNNModel(trainingFeatures.toTypedArray(), trainingLabels.toIntArray(), 1)
 
@@ -160,6 +175,7 @@ class BreathingTrainingActivity : AppCompatActivity() {
         val modelSaved = Utils.saveModelToFile(model, currentProfile, filesDir, "breathingModel")
 
         val loadedModel = Utils.loadModelFromFile(currentProfile, filesDir, "breathingModel")
+
 
         // Test the loaded model accuracy
         var correctCountLoaded = 0

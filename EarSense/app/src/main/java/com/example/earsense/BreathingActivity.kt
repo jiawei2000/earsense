@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
+import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -19,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
+import org.slf4j.helpers.Util
 import java.io.IOException
 
 class BreathingActivity : AppCompatActivity() {
@@ -28,13 +30,21 @@ class BreathingActivity : AppCompatActivity() {
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
     val audioSource = MediaRecorder.AudioSource.MIC
     val bufferSize = AudioRecord.getMinBufferSize(
-        sampleRate, channelConfig, audioEncoding
+        sampleRate,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT
     )
 
     lateinit var audioRecord: AudioRecord
     lateinit var audioManager: AudioManager
 
     lateinit var waveFormView: WaveFormView
+
+    lateinit var predictionText: TextView
+
+    val breathingModes = arrayOf("Nose Inhaled", "Nose Exhale", "Mouth Inhale", "Mouth Exhale")
+
+    lateinit var currentProfile: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +94,11 @@ class BreathingActivity : AppCompatActivity() {
 
         // WaveFormView
         waveFormView = findViewById(R.id.waveFormView)
+
+        // Prediction Text
+        predictionText = findViewById(R.id.textPrediction)
+
+        currentProfile = Utils.getCurrentProfile(this)
     }
 
     override fun onStop() {
@@ -124,10 +139,18 @@ class BreathingActivity : AppCompatActivity() {
                 )
                 audioRecord.startRecording()
 
+                val windowSize = sampleRate
+                val overlapSize = windowSize / 2
+                var bufferOffset = 0
+                var runningAudioBuffer = ShortArray(windowSize)
+
+                val knnModel = Utils.loadModelFromFile(currentProfile, filesDir, "breathingModel")
+
                 while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+
                     val audioData = ShortArray(bufferSize)
 
-                    val readResult = audioRecord.read(audioData, 0, audioData.size)
+                    val readResult = audioRecord.read(audioData, 0, bufferSize)
 
                     if (readResult > 0) {
                         //Process Audio Data
@@ -135,8 +158,65 @@ class BreathingActivity : AppCompatActivity() {
                         val amplitude = doubleAudioArray.maxOrNull() ?: 0.0
                         waveFormView.addAmplitude(amplitude.toFloat())
 
+                        // Only process if buffer is full
+                        if (bufferOffset + readResult < windowSize) {
+                            System.arraycopy(
+                                audioData,
+                                0,
+                                runningAudioBuffer,
+                                bufferOffset,
+                                readResult
+                            )
+                            bufferOffset += readResult
+                            continue
+                        }
+
+                        // Apply High Pass Filter
+                        val filter = PassFilter(
+                            500.toFloat(),
+                            sampleRate,
+                            PassFilter.PassType.Highpass,
+                            1.toFloat()
+                        )
+
+                        // Convert runningAudioBuffer to double
+                        val doubleRunningAudioArray = runningAudioBuffer.map { it.toDouble() }.toDoubleArray()
+
+                        for (i in doubleRunningAudioArray.indices) {
+                            filter.Update(doubleRunningAudioArray[i].toFloat())
+                            doubleRunningAudioArray[i] = filter.getValue().toDouble()
+                        }
+
+                        if (amplitude < 440) {
+                            // If amplitude is too low, skip
+                            continue
+                        } else {
+                            Log.d("AAAAAAAAAAAA", "Amplitude: $amplitude")
+                            // Extract segment around peak
+                            val segment = extractSegmentAroundPeak(doubleRunningAudioArray)
+                            val prediction = knnModel!!.predict(segment)
+
+                            // Update prediction text
+                            runOnUiThread {
+                                predictionText.text = "Prediction: ${breathingModes[prediction]}"
+                            }
+
+                        }
+
+                        // Slide existing buffer by overlap size
+                        System.arraycopy(
+                            runningAudioBuffer,
+                            overlapSize,
+                            runningAudioBuffer,
+                            0,
+                            windowSize - overlapSize
+                        )
+
+                        // Reset bufferOffset
+                        bufferOffset = overlapSize
 
                     }
+
                 }
             } catch (e: IOException) {
                 Log.d("ERROR in StepTracker", e.toString())
@@ -149,5 +229,28 @@ class BreathingActivity : AppCompatActivity() {
             audioRecord.stop()
             audioRecord.release()
         }
+    }
+
+    fun extractSegmentAroundPeak(window: DoubleArray): DoubleArray {
+        val segmentDuration = 0.4
+        val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
+        val peakIndex = window.indices.maxByOrNull { window[it].toInt() } ?: 0 // Find peak index
+
+        // Calculate segment start and end
+        // extract 0.15 seconds before and 0.25 seconds after the peak
+        var start = peakIndex - (0.15 * sampleRate).toInt()
+        var end = peakIndex + (0.25 * sampleRate).toInt()
+
+        // Handle out-of-bounds cases
+        if (start < 0) {
+            end -= start // Extend end
+            start = 0
+        }
+        if (end > window.size) {
+            start -= (end - window.size) // Extend start
+            end = window.size
+        }
+        // Extract the segment
+        return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
     }
 }
