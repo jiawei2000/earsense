@@ -28,7 +28,7 @@ class GestureTrainingActivity : AppCompatActivity() {
     var viewPager: ViewPager2? = null
 
     // Must match locations in GestureScreenSlidePagerAdapter
-    val locations = arrayOf("forehead", "left cheek", "right cheek", "nothing")
+    val locations = arrayOf("forehead", "left cheek", "right cheek")
 
     val sampleRate = 16000
     val channelConfig = AudioFormat.CHANNEL_OUT_MONO
@@ -102,30 +102,42 @@ class GestureTrainingActivity : AppCompatActivity() {
     fun buttonDebug() {
         val trainingFeatures = mutableListOf<DoubleArray>()
         val trainingLabels = mutableListOf<Int>()
+        val eculdianScores = mutableListOf<Double>()
 
         // Read data from all files and to create training data
         for (location in locations) {
             val filePath = filesDir.absolutePath + "/$currentProfile/$location/recorded_audio.pcm"
             val audioFile = File(filePath)
-            val audioData = readFile(audioFile)
+            val audioData =
+                Utils.readAudioFromFile(audioFile, sampleRate, channelConfig, audioEncoding)
 
             //Process Audio Data
-            val windowSize = sampleRate // 1 second window
-            val stepSize = windowSize / 2 // 50% overlap
-
-            val windows = slidingWindow(audioData.toShortArray(), windowSize, stepSize)
-            val segments = mutableListOf<ShortArray>()
+            val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
+            val windows = splitIntoWindows(doubleAudioData, sampleRate)
 
             for (window in windows) {
                 val segment = extractSegmentAroundPeak(window)
-                segments.add(segment)
+
+                // Find max amplitude
+                val maximumAmplitude = segment.maxOrNull() ?: 0.0
+
+                // if maximum amplitude is less than 700, skip this segment
+                if (maximumAmplitude < 700) {
+                    continue
+                }
+
+                // Process segment data
                 // Apply low-pass filter
-                val filteredSegment = lowPassFilter(segment, sampleRate, 50.toFloat())
+                val filter =
+                    PassFilter(50.toFloat(), sampleRate, PassFilter.PassType.Lowpass, 1.toFloat())
+                for (i in segment.indices) {
+                    filter.Update(segment[i].toFloat())
+                    segment[i] = filter.getValue().toDouble()
+                }
 
                 //Apply FTT to segment
                 // FFT expects FloatArray
-                val floatSegment = filteredSegment.map { it.toFloat() }.toFloatArray()
-//                val floatSegment = segment.map { it.toFloat() }.toFloatArray()
+                val floatSegment = segment.map { it.toFloat() }.toFloatArray()
                 val fft = FloatFFT_1D(floatSegment.size.toLong())
                 fft.realForward(floatSegment)
 
@@ -140,86 +152,63 @@ class GestureTrainingActivity : AppCompatActivity() {
 
         val model = trainKNNModel(trainingFeatures.toTypedArray(), trainingLabels.toIntArray(), 1)
 
+        val testSegment = trainingFeatures[14]
+        // Calculate distance between testSegment and all training segments
+        for (i in 0 until trainingFeatures.size) {
+            val distance = cosineSimilarity(testSegment, trainingFeatures[i])
+            eculdianScores.add(distance)
+        }
+        // Sort and log highest 5 distances dsecending nd their corresponding
+        val sortedIndices = eculdianScores.indices.sortedByDescending { eculdianScores[it] }
+//        val sortedIndices = eculdianScores.indices.sortedBy { eculdianScores[it] }
+        for (i in 0 until 5) {
+            Log.d("AAAAAA", "Distance: ${eculdianScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}")
+        }
+
         // Save the model to a file
-        saveKNNModel(model!!)
+        Utils.saveModelToFile(model, currentProfile, filesDir, "gestureModel")
+
+        val loadedModel = Utils.loadModelFromFile(currentProfile, filesDir, "gestureModel")
+
 
         // Test the model using all segments
         var correctCount = 0
         for (i in 0 until trainingFeatures.size) {
             val testSegment = trainingFeatures[i]
             //Log test segment
-            val prediction = model.predict(testSegment)
+            val prediction = loadedModel?.predict(testSegment)
+//            Log.d("AAAAAA", "Prediction: $prediction, Actual: ${trainingLabels[i]}")
             if (prediction == trainingLabels[i]) {
                 correctCount++
             }
         }
         Log.d("AAAAAA", "Accuracy: ${correctCount.toDouble() / trainingFeatures.size}")
+        //Log trianing features size
+        Log.d("BBBBBB", "Training Features Size: ${trainingFeatures.size}")
     }
 
-    fun readFile(audioFile: File): List<Short> {
-        val minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            channelConfig,
-            audioEncoding
-        )
-        val audioData = mutableListOf<Short>()
-        val inputFile = FileInputStream(audioFile)
-        try {
-            val byteArray = ByteArray(minBufferSize)
+    fun splitIntoWindows(audioData: DoubleArray, samplingRate: Int): List<DoubleArray> {
+        val windowSize = samplingRate // 1-second window
+        val numWindows = (audioData.size + windowSize - 1) / windowSize
+        val windows = mutableListOf<DoubleArray>()
 
-            var bytesRead: Int
-            while (inputFile.read(byteArray).also { bytesRead = it } != -1) {
-                // Convert byteArray to shortArray for 16-bit data
-                val shortArray = ByteArrayToShortArray(byteArray)
-                // Add short array to audioData
-                audioData.addAll(shortArray.toList())
+        for (i in 0 until numWindows) {
+            val startIdx = i * windowSize
+            val endIdx = minOf(startIdx + windowSize, audioData.size) // Avoid overflow
+            // if the window size is less than 1 second, pad with zeros
+            if (endIdx - startIdx < windowSize) {
+                val paddedWindow = DoubleArray(windowSize)
+                audioData.copyInto(paddedWindow, 0, startIdx, endIdx)
+                windows.add(paddedWindow)
+                continue
             }
-        } catch (e: IOException) {
-            Log.d("ERROR: GestureTrainingActivity", "Error reading audio file: ${e.message}")
-        } finally {
-            inputFile.close()
-
+            windows.add(audioData.sliceArray(startIdx until endIdx))
         }
-        return audioData
-    }
-
-    fun slidingWindow(audioData: ShortArray, windowSize: Int, stepSize: Int): List<ShortArray> {
-        val windows = mutableListOf<ShortArray>()
-
-        var start = 0
-        while (start + windowSize <= audioData.size) {
-            // Extract the window
-            val window = audioData.copyOfRange(start, start + windowSize)
-            windows.add(window)
-
-            // Move the window forward by stepSize
-            start += stepSize
-        }
-
         return windows
     }
 
-    fun lowPassFilter(input: ShortArray, sampleRate: Int, cutoffFreq: Float): ShortArray {
-        val output = ShortArray(input.size)
 
-        // Calculate alpha (filter coefficient)
-        val dt = 1.0f / sampleRate
-        val rc = 1.0f / (2 * Math.PI.toFloat() * cutoffFreq)
-        val alpha = dt / (rc + dt)
-
-        var previousOutput = 0f
-
-        for (i in input.indices) {
-            val currentInput = input[i].toFloat()
-            val filteredValue = alpha * currentInput + (1 - alpha) * previousOutput
-            output[i] = filteredValue.toInt().toShort()
-            previousOutput = filteredValue
-        }
-
-        return output
-    }
-
-    fun trainKNNModel(features: Array<DoubleArray>, labels: IntArray, k: Int): KNN<DoubleArray>? {
+    fun trainKNNModel(features: Array<DoubleArray>, labels: IntArray, k: Int): KNN<DoubleArray> {
         return KNN.fit(features, labels, k, EuclideanDistance())
     }
 
@@ -238,7 +227,7 @@ class GestureTrainingActivity : AppCompatActivity() {
         ObjectOutputStream(FileOutputStream(file)).use { it.writeObject(model) }
     }
 
-    fun extractSegmentAroundPeak(window: ShortArray): ShortArray {
+    fun extractSegmentAroundPeak(window: DoubleArray): DoubleArray {
         val segmentDuration = 0.4
         val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
         val peakIndex = window.indices.maxByOrNull { window[it].toInt() } ?: 0 // Find peak index
@@ -262,14 +251,28 @@ class GestureTrainingActivity : AppCompatActivity() {
         return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
     }
 
-    private fun ByteArrayToShortArray(byteArray: ByteArray): ShortArray {
-        val shortArray = ShortArray(byteArray.size / 2) // 2 bytes per short
-        for (i in shortArray.indices) {
-            shortArray[i] =
-                ((byteArray[i * 2 + 1].toInt() shl 8) or (byteArray[i * 2].toInt() and 0xFF)).toShort()
+    fun euclideanDistance(signal1: DoubleArray, signal2: DoubleArray): Double {
+        var sum = 0.0
+        for (i in signal1.indices) {
+            sum += Math.pow(signal1[i] - signal2[i], 2.0)
         }
-        return shortArray
+        return Math.sqrt(sum)
     }
+
+    fun cosineSimilarity(signal1: DoubleArray, signal2: DoubleArray): Double {
+        var dotProduct = 0.0
+        var normSignal1 = 0.0
+        var normSignal2 = 0.0
+
+        for (i in signal1.indices) {
+            dotProduct += signal1[i] * signal2[i]
+            normSignal1 += signal1[i] * signal1[i]
+            normSignal2 += signal2[i] * signal2[i]
+        }
+
+        return dotProduct / (Math.sqrt(normSignal1) * Math.sqrt(normSignal2))
+    }
+
 }
 
 class GestureScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {

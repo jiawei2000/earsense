@@ -194,29 +194,6 @@ class BreathingTrainingActivity : AppCompatActivity() {
 
     }
 
-    fun applyHighPassFilter(
-        doubleAudioData: DoubleArray,
-        samplingRate: Double,
-        cutoffFreq: Double
-    ): DoubleArray {
-        // Define filter parameters
-        val filterWidth = 5.0
-        val rippleValue = 60.0
-        val cutoff = doubleArrayOf(cutoffFreq)  // Cutoff frequency
-
-        // Create FIR windowed filter
-        val fw = FIRWin1(rippleValue, filterWidth, samplingRate)
-
-        // Compute FIR filter coefficients
-        val coefficients = fw.computeCoefficients(cutoff, FIRWin1.FIRfilterType.HIGHPASS, true)
-
-        // Apply FIR filter
-        val filteredSignal = fw.firfilter(coefficients, doubleAudioData)
-
-        // Convert back to FloatArray
-        return filteredSignal
-    }
-
     fun splitIntoWindows(audioData: DoubleArray, samplingRate: Int): List<DoubleArray> {
         val windowSize = samplingRate // 1-second window
         val numWindows = (audioData.size + windowSize - 1) / windowSize

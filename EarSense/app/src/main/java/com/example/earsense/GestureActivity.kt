@@ -13,9 +13,11 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -48,6 +50,15 @@ class GestureActivity : AppCompatActivity() {
 
     lateinit var waveFormView: WaveFormView
     lateinit var debugTextView: TextView
+
+    lateinit var imageCircle: ImageView
+
+    val gestures = arrayOf("forehead", "left cheek", "right cheek")
+    val circleLocations = arrayOf(
+        arrayOf(0.28,0.5,300,200),
+        arrayOf(0.83,0.4,150,200),
+        arrayOf(0.83,0.65,150,200)
+    )
 
     private lateinit var knnModel: KNN<DoubleArray>
 
@@ -109,6 +120,9 @@ class GestureActivity : AppCompatActivity() {
         // Debug Text View
         debugTextView = findViewById(R.id.textDebug)
 
+        // Circle Image
+        imageCircle = findViewById(R.id.imageCircle)
+
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         var bluetoothDevice: AudioDeviceInfo? = null
 
@@ -136,7 +150,7 @@ class GestureActivity : AppCompatActivity() {
 
     fun buttonStart() {
         //Load KNN Model
-        knnModel = loadKnnModel() ?: return
+        knnModel = Utils.loadModelFromFile(currentProfile, filesDir, "gestureModel")!!
         startRecording()
     }
 
@@ -181,7 +195,7 @@ class GestureActivity : AppCompatActivity() {
                 //Log bufferSize
                 Log.d("AAAAAAAA", "Buffer Size: $bufferSize")
 
-                var runningAudioData = mutableListOf<Short>()
+                var runningAudioData = mutableListOf<Double>()
                 var predictions = mutableListOf<Int>()
 
                 while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -190,24 +204,41 @@ class GestureActivity : AppCompatActivity() {
                     val readResult = audioRecord?.read(audioData, 0, audioData.size)
 
                     if (readResult != null && readResult > 0) {
+                        val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
+
                         //Calculate amplitude
-                        val amplitude = audioData.maxOrNull()
-                        waveFormView.addAmplitude(amplitude!!.toFloat())
-                        runningAudioData.addAll(audioData.toList())
+                        val amplitude = doubleAudioData.maxOrNull() ?: 0.0
+                        waveFormView.addAmplitude(amplitude.toFloat())
+                        runningAudioData.addAll(doubleAudioData.toList())
 
                         // Only process Audio every 1 second
                         if (runningAudioData.size < 32000) {
                             continue
                         } else {
+                            // Check if amplitude is above threshold
+                            val runningAudioMax = runningAudioData.maxOrNull() ?: 0.0
+                            // Log amplitude
+                            Log.d("AAAAAAAA", "Amplitude: $runningAudioMax")
+
+                            if (runningAudioMax < 700) {
+                                runningAudioData = mutableListOf()
+                                continue
+                            }
+
                             //Process Audio
                             //Extract segment around peak
-                            val segment = extractSegmentAroundPeak(runningAudioData.toShortArray())
+                            val segment = extractSegmentAroundPeak(runningAudioData.toDoubleArray())
                             //Apply low-pass filter
-                            val filteredSegment = lowPassFilter(segment, sampleRate, 50.toFloat())
+                            val filter =
+                                PassFilter(50.toFloat(), sampleRate, PassFilter.PassType.Lowpass, 1.toFloat())
+                            for (i in segment.indices) {
+                                filter.Update(segment[i].toFloat())
+                                segment[i] = filter.getValue().toDouble()
+                            }
 
                             //Apply FTT to segment
                             // FFT expects FloatArray
-                            val floatSegment = filteredSegment.map { it.toFloat() }.toFloatArray()
+                            val floatSegment = segment.map { it.toFloat() }.toFloatArray()
                             val fft = FloatFFT_1D(floatSegment.size.toLong())
                             fft.realForward(floatSegment)
 
@@ -216,20 +247,27 @@ class GestureActivity : AppCompatActivity() {
 
                             //Predict using AudioData
                             val prediction = knnModel.predict(doubleSegment)
-                            predictions.add(prediction)
-                            // If predictions more than 5 remove oldest one
-                            if (predictions.size > 5) {
-                                predictions.removeAt(0)
-                            }
+
 
                             //Update Debug textView
                             runOnUiThread {
-                                debugTextView.text = "Prediction: ${predictions}"
+                                // Display circle
+                                val params = imageCircle.layoutParams as ConstraintLayout.LayoutParams
+                                val vertical = circleLocations[prediction][0] as Double
+                                val horizontal = circleLocations[prediction][1] as Double
+
+                                params.verticalBias = vertical.toFloat()
+                                params.horizontalBias = horizontal.toFloat()
+
+                                params.width = circleLocations[prediction][2] as Int
+                                params.height = circleLocations[prediction][3] as Int
+                                imageCircle.layoutParams = params
+                                debugTextView.text = "Prediction: ${gestures[prediction]}"
                             }
 
                             //Log Prediction
-                            Log.d("BBBBBBB", "Prediction: ${prediction}")
-                            runningAudioData = mutableListOf<Short>()
+                            Log.d("BBBBBBB", "Prediction: ${gestures[prediction]}")
+                            runningAudioData = mutableListOf()
                         }
 
 
@@ -248,42 +286,6 @@ class GestureActivity : AppCompatActivity() {
         waveFormView.clear()
         audioManager?.stopBluetoothSco()
         audioManager?.isBluetoothScoOn = false
-    }
-
-    fun loadKnnModel(): KNN<DoubleArray>? {
-        val file = File(filesDir, "$currentProfile/models/knn_model")
-        if (!file.exists()) {
-            Log.d("ERROR: GestureActivity", "KNN Model file not found")
-            return null
-        }
-        return ObjectInputStream(FileInputStream(file)).use { it.readObject() as KNN<DoubleArray> }
-    }
-
-    fun readFile(audioFile: File): List<Short> {
-        val minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            channelConfig,
-            audioEncoding
-        )
-        val audioData = mutableListOf<Short>()
-        val inputFile = FileInputStream(audioFile)
-        try {
-            val byteArray = ByteArray(minBufferSize)
-
-            var bytesRead: Int
-            while (inputFile.read(byteArray).also { bytesRead = it } != -1) {
-                // Convert byteArray to shortArray for 16-bit data
-                val shortArray = ByteArrayToShortArray(byteArray)
-                // Add short array to audioData
-                audioData.addAll(shortArray.toList())
-            }
-        } catch (e: IOException) {
-            Log.d("GestureActivity", "Error reading audio file: ${e.message}")
-        } finally {
-            inputFile.close()
-
-        }
-        return audioData
     }
 
     fun playAudio(audioData: List<Short>) {
@@ -364,11 +366,7 @@ class GestureActivity : AppCompatActivity() {
         return output
     }
 
-    fun trainKNNModel(features: Array<DoubleArray>, labels: IntArray, k: Int): KNN<DoubleArray>? {
-        return KNN.fit(features, labels, k, EuclideanDistance())
-    }
-
-    fun extractSegmentAroundPeak(window: ShortArray): ShortArray {
+    fun extractSegmentAroundPeak(window: DoubleArray): DoubleArray {
         val segmentDuration = 0.4
         val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
         val peakIndex = window.indices.maxByOrNull { window[it].toInt() } ?: 0 // Find peak index
