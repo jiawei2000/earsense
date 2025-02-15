@@ -13,7 +13,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
-import com.github.psambit9791.jdsp.filter.FIRWin1
 import com.github.psambit9791.jdsp.signal.peaks.FindPeak
 import com.google.android.material.appbar.MaterialToolbar
 import smile.classification.KNN

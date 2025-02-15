@@ -19,6 +19,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.github.psambit9791.jdsp.signal.peaks.FindPeak
 import com.google.android.material.appbar.MaterialToolbar
 import org.slf4j.helpers.Util
 import java.io.IOException
@@ -252,5 +253,39 @@ class BreathingActivity : AppCompatActivity() {
         }
         // Extract the segment
         return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
+    }
+
+    fun extractSegmentAroundPeak(window: DoubleArray, peakIndex: Int): DoubleArray {
+        val segmentDuration = 0.4
+        val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
+
+        // Calculate segment start and end
+        // extract 0.15 seconds before and 0.25 seconds after the peak
+        var start = peakIndex - (0.15 * sampleRate).toInt()
+        var end = peakIndex + (0.25 * sampleRate).toInt()
+
+        // Handle out-of-bounds cases
+        if (start < 0) {
+            end -= start // Extend end
+            start = 0
+        }
+        if (end > window.size) {
+            start -= (end - window.size) // Extend start
+            end = window.size
+        }
+
+        // Extract the segment
+        return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
+    }
+
+    fun findPeaks(audioData: DoubleArray, minPeakAmplitude: Double): IntArray {
+        val fp = FindPeak(audioData)
+
+        // Detect peaks
+        val peaks = fp.detectPeaks().peaks
+
+        //Filter peaks based on minimum amplitude
+        val filteredPeaks = peaks.filter { audioData[it] >= minPeakAmplitude }.toIntArray()
+        return filteredPeaks
     }
 }

@@ -58,6 +58,18 @@
         app:layout_constraintVertical_bias="0" />
 
     <Button
+        android:id="@+id/buttonActivity"
+        android:layout_width="240dp"
+        android:layout_height="100dp"
+        android:layout_marginTop="30dp"
+        android:text="Activity Recognition"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/buttonGesture"
+        app:layout_constraintVertical_bias="0" />
+
+    <Button
         android:id="@+id/buttonBreathing"
         android:layout_width="240dp"
         android:layout_height="100dp"
@@ -66,7 +78,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/buttonGesture"
+        app:layout_constraintTop_toBottomOf="@id/buttonActivity"
         app:layout_constraintVertical_bias="0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

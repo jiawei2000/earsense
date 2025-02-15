@@ -57,7 +57,9 @@ class GestureActivity : AppCompatActivity() {
     var currentProfile = ""
 
     lateinit var plot: XYPlot
-    lateinit var waveFormView: WaveFormView
+    var maxGraph = 0.0
+    var minGraph = 0.0
+
     lateinit var debugTextView: TextView
 
     lateinit var imageCircle: ImageView
@@ -73,8 +75,6 @@ class GestureActivity : AppCompatActivity() {
 
     lateinit var trainingFeatures: Array<DoubleArray>
     lateinit var trainingLabels: IntArray
-
-    lateinit var audioTrack: AudioTrack
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,7 +104,6 @@ class GestureActivity : AppCompatActivity() {
         // Debug Button
         val buttonPlayAudio: Button = findViewById(R.id.buttonDebug)
         buttonPlayAudio.setOnClickListener {
-            buttonDebug()
         }
 
         // Start Button
@@ -118,9 +117,6 @@ class GestureActivity : AppCompatActivity() {
         buttonStop.setOnClickListener {
             buttonStop()
         }
-
-        // Waveform View
-        waveFormView = findViewById(R.id.waveFormView)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -142,8 +138,6 @@ class GestureActivity : AppCompatActivity() {
 
         //Select bluetooth earbuds as audio source
         for (device in audioManager!!.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-            //Log all devices
-//            Log.d("Device", device.productName.toString())
             if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
                 bluetoothDevice = device
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -155,10 +149,6 @@ class GestureActivity : AppCompatActivity() {
                 break
             }
         }
-
-    }
-
-    fun buttonDebug() {
 
     }
 
@@ -413,9 +403,7 @@ class GestureActivity : AppCompatActivity() {
                             val prediction = votes.indexOf(votes.max())
                             Log.d("AAAAAA", "Votes: ${votes.toList()}")
 
-
-//
-//                            //Update Debug textView
+                            //Update Debug textView
                             runOnUiThread {
                                 // Display circle
                                 val params =
@@ -444,51 +432,8 @@ class GestureActivity : AppCompatActivity() {
     fun stopRecording() {
         audioRecord?.stop()
         audioRecord?.release()
-        waveFormView.clear()
         audioManager?.stopBluetoothSco()
         audioManager?.isBluetoothScoOn = false
-    }
-
-    fun playAudio(audioData: List<Short>) {
-        val minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            channelConfig,
-            audioEncoding
-        )
-
-        audioTrack = AudioTrack(
-            AudioManager.STREAM_MUSIC,
-            sampleRate,
-            channelConfig,
-            audioEncoding,
-            minBufferSize,
-            AudioTrack.MODE_STREAM
-        )
-
-        val shortArray = ShortArray(minBufferSize / 2)
-        val audioStream = audioData.toShortArray()
-        audioTrack.play()
-
-        Thread {
-            try {
-                var offset = 0
-                while (offset < audioStream.size) {
-                    val length = minOf(shortArray.size, audioStream.size - offset)
-                    System.arraycopy(audioStream, offset, shortArray, 0, length)
-                    audioTrack.write(shortArray, 0, length)
-                    offset += length
-                }
-            } catch (e: IOException) {
-                Log.d("GestureActivity:Playback", e.toString())
-            } finally {
-                stopAudio()
-            }
-        }.start()
-    }
-
-    fun stopAudio() {
-        audioTrack.stop()
-        audioTrack.release()
     }
 
     fun extractSegmentAroundPeak(window: DoubleArray, peakIndex: Int): DoubleArray {
@@ -524,9 +469,6 @@ class GestureActivity : AppCompatActivity() {
         val filteredPeaks = peaks.filter { audioData[it] >= minPeakAmplitude }.toIntArray()
         return filteredPeaks
     }
-
-    var maxGraph = 0.0
-    var minGraph = 0.0
 
     private fun plotAudioSignal(audioSignal: DoubleArray, title: String, color: Int) {
         // Step 1: Create an XYSeries to hold the data

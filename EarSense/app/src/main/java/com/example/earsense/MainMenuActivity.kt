@@ -45,6 +45,13 @@ class MainMenuActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+        // Activity Recognition Button
+        val buttonActivity: Button = findViewById(R.id.buttonActivity)
+        buttonActivity.setOnClickListener {
+            val intent = Intent(this, ActivityRecognitionActivity::class.java)
+            startActivity(intent)
+        }
+
         // Breathing Recognition Button
         val buttonBreathing: Button = findViewById(R.id.buttonBreathing)
         buttonBreathing.setOnClickListener {

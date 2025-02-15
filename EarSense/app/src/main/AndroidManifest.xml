@@ -18,6 +18,12 @@
         android:theme="@style/Theme.EarSense"
         tools:targetApi="33">
         <activity
+            android:name=".ActivityTrainingActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ActivityRecognitionActivity"
+            android:exported="false" />
+        <activity
             android:name=".BreathingTrainingActivity"
             android:exported="false" />
         <activity
