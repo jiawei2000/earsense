@@ -56,6 +56,7 @@ dependencies {
         exclude("org.apache.maven.surefire", "surefire-api")
         exclude("org.apache.maven.surefire", "common-java5")
     }
+    implementation(libs.androidplot)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

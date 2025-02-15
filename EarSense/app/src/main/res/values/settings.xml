@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     // Define the settings for the app
-    <integer name="timesToTap">20</integer>
+    <integer name="timesToTap">5</integer>
 </resources>

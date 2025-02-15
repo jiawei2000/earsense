@@ -42,8 +42,14 @@ class Utils {
         }
 
         @JvmStatic
-        fun readAudioFromFile(audioFile: File, sampleRate: Int, channelConfig: Int, audioEncoding: Int): List<Short> {
-            val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioEncoding)
+        fun readAudioFromFile(
+            audioFile: File,
+            sampleRate: Int,
+            channelConfig: Int,
+            audioEncoding: Int
+        ): List<Short> {
+            val minBufferSize =
+                AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioEncoding)
             val audioData = mutableListOf<Short>()
             val inputFile = FileInputStream(audioFile)
             try {
@@ -65,7 +71,12 @@ class Utils {
         }
 
         @JvmStatic
-        fun saveModelToFile(model: KNN<DoubleArray>, profileName: String, filesDir: File, filename: String): Boolean {
+        fun saveModelToFile(
+            model: KNN<DoubleArray>,
+            profileName: String,
+            filesDir: File,
+            filename: String
+        ): Boolean {
             return try {
                 val modelFile = getModelFile(profileName, filesDir, filename)
                 ObjectOutputStream(FileOutputStream(modelFile)).use { it.writeObject(model) }
@@ -77,7 +88,11 @@ class Utils {
         }
 
         @JvmStatic
-        fun loadModelFromFile(profileName: String, filesDir: File, filename: String): KNN<DoubleArray>? {
+        fun loadModelFromFile(
+            profileName: String,
+            filesDir: File,
+            filename: String
+        ): KNN<DoubleArray>? {
             return try {
                 val modelFile = getModelFile(profileName, filesDir, filename)
                 ObjectInputStream(FileInputStream(modelFile)).use { it.readObject() as KNN<DoubleArray> }
@@ -93,5 +108,136 @@ class Utils {
 
             return File(directory, filename)
         }
+
+        @JvmStatic
+        fun saveDoubleArrayToFile(
+            doubleArrays: Array<DoubleArray>,
+            fileDir: File,
+            profileName: String,
+            fileName: String
+        ) {
+            return try {
+                val directory = File(fileDir, "$profileName/trainingFeatures")
+
+                if (!directory.exists()) directory.mkdirs()
+
+                val file = File(directory, fileName)
+
+                val fileOutputStream = FileOutputStream(file)
+                val objectOutputStream = ObjectOutputStream(fileOutputStream)
+
+                objectOutputStream.writeObject(doubleArrays)
+
+                // Log location saved to
+                Log.d("Utils.saveDoubleArrayToFile", "Saved to: ${file.absolutePath}")
+
+                // Close the streams
+                objectOutputStream.close()
+                fileOutputStream.close()
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        @JvmStatic
+        fun saveIntArrayToFile(
+            intArrays: IntArray,
+            fileDir: File,
+            profileName: String,
+            fileName: String
+        ) {
+            return try {
+                val directory = File(fileDir, "$profileName/trainingLabels")
+                // Create directory if doesn't exist
+                if (!directory.exists()) directory.mkdirs()
+
+                val file = File(directory, fileName)
+
+                val fileOutputStream = FileOutputStream(file)
+                val objectOutputStream = ObjectOutputStream(fileOutputStream)
+
+                objectOutputStream.writeObject(intArrays)
+
+                // Close the streams
+                objectOutputStream.close()
+                fileOutputStream.close()
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        @JvmStatic
+        fun readDoubleArrayFromFile(
+            fileDir: File,
+            profileName: String,
+            fileName: String
+        ): Array<DoubleArray> {
+            return try {
+                val file = File(fileDir, "$profileName/trainingFeatures/$fileName")
+
+                val fileInputStream = FileInputStream(file)
+                val objectInputStream = ObjectInputStream(fileInputStream)
+
+                val array = objectInputStream.readObject() as Array<DoubleArray>
+
+                // Close the streams
+                objectInputStream.close()
+                fileInputStream.close()
+
+                array
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyArray()
+
+            }
+        }
+
+        @JvmStatic
+        fun readIntArrayFromFile(fileDir: File, profileName: String, fileName: String): IntArray {
+            return try {
+                val file = File(fileDir, "$profileName/trainingLabels/$fileName")
+
+                val fileInputStream = FileInputStream(file)
+                val objectInputStream = ObjectInputStream(fileInputStream)
+
+                val array = objectInputStream.readObject() as IntArray
+
+                // Close the streams
+                objectInputStream.close()
+                fileInputStream.close()
+
+                array
+            } catch (e: Exception) {
+                e.printStackTrace()
+                intArrayOf()
+            }
+        }
+
+        @JvmStatic
+        fun euclideanDistance(signal1: DoubleArray, signal2: DoubleArray): Double {
+            var sum = 0.0
+            for (i in signal1.indices) {
+                sum += Math.pow(signal1[i] - signal2[i], 2.0)
+            }
+            return Math.sqrt(sum)
+        }
+
+        @JvmStatic
+        fun cosineSimilarity(signal1: DoubleArray, signal2: DoubleArray): Double {
+            var dotProduct = 0.0
+            var normSignal1 = 0.0
+            var normSignal2 = 0.0
+
+            for (i in signal1.indices) {
+                dotProduct += signal1[i] * signal2[i]
+                normSignal1 += signal1[i] * signal1[i]
+                normSignal2 += signal2[i] * signal2[i]
+            }
+
+            return dotProduct / (Math.sqrt(normSignal1) * Math.sqrt(normSignal2))
+        }
+
     }
 }

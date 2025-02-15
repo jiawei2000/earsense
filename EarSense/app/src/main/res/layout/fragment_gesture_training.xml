@@ -67,7 +67,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.163"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/waveformView"
+        app:layout_constraintTop_toBottomOf="@id/textTimer"
         app:layout_constraintVertical_bias="0.1" />
 
     <Button
@@ -79,13 +79,13 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.85"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/waveformView"
+        app:layout_constraintTop_toBottomOf="@id/textTimer"
         app:layout_constraintVertical_bias="0.1" />
 
     <com.example.earsense.WaveFormView
         android:id="@+id/waveformView"
         android:layout_width="match_parent"
-        android:layout_height="400px"
+        android:layout_height="1dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@id/textTimer"
         app:layout_constraintVertical_bias="0.053"

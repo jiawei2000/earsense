@@ -13,6 +13,7 @@ materialVersion = "1.13.0-alpha10"
 jtransform = "3.1"
 smile = "2.6.0"
 jdsp = "3.1.0"
+android_plot = "1.5.11"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -27,6 +28,7 @@ google-material = { group = "com.google.android.material", name = "material", ve
 jtransform = { group = "com.github.wendykierp", name = "JTransforms", version.ref = "jtransform" }
 smile = { group = "com.github.haifengl", name = "smile-core", version.ref = "smile" }
 jdsp = { group = "com.github.psambit9791", name = "jdsp", version.ref = "jdsp" }
+androidplot = { group = "com.androidplot", name = "androidplot-core", version.ref = "android_plot" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

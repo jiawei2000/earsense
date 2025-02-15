@@ -1,7 +1,7 @@
 package com.example.earsense
 
+import android.graphics.Color
 import android.media.AudioFormat
-import android.media.AudioTrack
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -14,14 +14,18 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
+import com.androidplot.xy.BoundaryMode
+import com.androidplot.xy.LineAndPointFormatter
+import com.androidplot.xy.XYPlot
+import com.androidplot.xy.XYSeries
+import com.github.psambit9791.jdsp.signal.peaks.FindPeak
 import com.google.android.material.appbar.MaterialToolbar
+import org.apache.commons.math3.stat.correlation.PearsonsCorrelation
 import org.jtransforms.fft.FloatFFT_1D
 import smile.classification.KNN
 import smile.math.distance.EuclideanDistance
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.IOException
 import java.io.ObjectOutputStream
 
 class GestureTrainingActivity : AppCompatActivity() {
@@ -35,6 +39,8 @@ class GestureTrainingActivity : AppCompatActivity() {
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
 
     var currentProfile = ""
+
+    lateinit var plot: XYPlot
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +98,9 @@ class GestureTrainingActivity : AppCompatActivity() {
             }
         })
 
+        // Plot for Debugging
+        plot = findViewById(R.id.plot)
+
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -103,6 +112,10 @@ class GestureTrainingActivity : AppCompatActivity() {
         val trainingFeatures = mutableListOf<DoubleArray>()
         val trainingLabels = mutableListOf<Int>()
         val eculdianScores = mutableListOf<Double>()
+        val cosineScores = mutableListOf<Double>()
+        val pearsonCorrelationScores = mutableListOf<Double>()
+
+        var isDebug = 0
 
         // Read data from all files and to create training data
         for (location in locations) {
@@ -116,74 +129,100 @@ class GestureTrainingActivity : AppCompatActivity() {
             val windows = splitIntoWindows(doubleAudioData, sampleRate)
 
             for (window in windows) {
-                val segment = extractSegmentAroundPeak(window)
 
-                // Find max amplitude
-                val maximumAmplitude = segment.maxOrNull() ?: 0.0
-
-                // if maximum amplitude is less than 700, skip this segment
-                if (maximumAmplitude < 700) {
-                    continue
-                }
-
+                // Make new array
+                val lowpassSegment = DoubleArray(window.size)
                 // Process segment data
                 // Apply low-pass filter
                 val filter =
                     PassFilter(50.toFloat(), sampleRate, PassFilter.PassType.Lowpass, 1.toFloat())
-                for (i in segment.indices) {
-                    filter.Update(segment[i].toFloat())
-                    segment[i] = filter.getValue().toDouble()
+                for (i in window.indices) {
+                    filter.Update(window[i].toFloat())
+                    lowpassSegment[i] = filter.getValue().toDouble()
                 }
+
+                val extractedSegment = extractSegmentAroundPeak(lowpassSegment)
+
 
                 //Apply FTT to segment
                 // FFT expects FloatArray
-                val floatSegment = segment.map { it.toFloat() }.toFloatArray()
+                val floatSegment = extractedSegment.map { it.toFloat() }.toFloatArray()
                 val fft = FloatFFT_1D(floatSegment.size.toLong())
                 fft.realForward(floatSegment)
 
                 // Add to training features
                 // Smile KNN Expects DoubleArray
                 val doubleSegment = floatSegment.map { it.toDouble() }.toDoubleArray()
+
+
+                if (isDebug == 3) {
+                    plotAudioSignal(doubleSegment, "ftt", Color.RED)
+                }
+                if (isDebug == 9) {
+                    plotAudioSignal(doubleSegment, "ftt", Color.YELLOW)
+                }
+                if (isDebug == 14) {
+                    plotAudioSignal(doubleSegment, "ftt", Color.GREEN)
+                }
+                isDebug++
+
                 trainingFeatures.add(doubleSegment)
                 trainingLabels.add(locations.indexOf(location))
             }
         }// End of locations for loop
 
 
-        val model = trainKNNModel(trainingFeatures.toTypedArray(), trainingLabels.toIntArray(), 1)
-
-        val testSegment = trainingFeatures[14]
+        // TESTING RESULTS
+        val testSegment = trainingFeatures[7]
         // Calculate distance between testSegment and all training segments
         for (i in 0 until trainingFeatures.size) {
-            val distance = cosineSimilarity(testSegment, trainingFeatures[i])
-            eculdianScores.add(distance)
+            val eculideanScore = Utils.euclideanDistance(testSegment, trainingFeatures[i])
+            eculdianScores.add(eculideanScore)
+
+            val cosineScore = Utils.cosineSimilarity(testSegment, trainingFeatures[i])
+            cosineScores.add(cosineScore)
+
+            val pearsonCorrelationScore =
+                PearsonsCorrelation().correlation(testSegment, trainingFeatures[i])
+            pearsonCorrelationScores.add(pearsonCorrelationScore)
         }
-        // Sort and log highest 5 distances dsecending nd their corresponding
-        val sortedIndices = eculdianScores.indices.sortedByDescending { eculdianScores[it] }
-//        val sortedIndices = eculdianScores.indices.sortedBy { eculdianScores[it] }
+        // Sort and log lowest 5 eculedian score
+        val sortedIndices = eculdianScores.indices.sortedBy { eculdianScores[it] }
         for (i in 0 until 5) {
-            Log.d("AAAAAA", "Distance: ${eculdianScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}")
+            Log.d(
+                "AAAAAA",
+                "Eculedian: ${eculdianScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}"
+            )
         }
 
-        // Save the model to a file
-        Utils.saveModelToFile(model, currentProfile, filesDir, "gestureModel")
-
-        val loadedModel = Utils.loadModelFromFile(currentProfile, filesDir, "gestureModel")
-
-
-        // Test the model using all segments
-        var correctCount = 0
-        for (i in 0 until trainingFeatures.size) {
-            val testSegment = trainingFeatures[i]
-            //Log test segment
-            val prediction = loadedModel?.predict(testSegment)
-//            Log.d("AAAAAA", "Prediction: $prediction, Actual: ${trainingLabels[i]}")
-            if (prediction == trainingLabels[i]) {
-                correctCount++
-            }
+        // Sort and log highest 5 cosine score
+        val sortedIndicesCosine = cosineScores.indices.sortedByDescending { cosineScores[it] }
+        for (i in 0 until 5) {
+            Log.d(
+                "AAAAAA",
+                "Cosine: ${cosineScores[sortedIndicesCosine[i]]}, Label: ${trainingLabels[sortedIndicesCosine[i]]}"
+            )
         }
-        Log.d("AAAAAA", "Accuracy: ${correctCount.toDouble() / trainingFeatures.size}")
-        //Log trianing features size
+
+        // Sort and log highest 5 pearson correlation score
+        val sortedIndicesPearson =
+            pearsonCorrelationScores.indices.sortedByDescending { pearsonCorrelationScores[it] }
+        for (i in 0 until 5) {
+            Log.d(
+                "AAAAAA",
+                "Pearson: ${pearsonCorrelationScores[sortedIndicesPearson[i]]}, Label: ${trainingLabels[sortedIndicesPearson[i]]}"
+            )
+        }
+
+        // Save the trainingFeatures and trainingLabels to a file
+        val featuresArray = trainingFeatures.toTypedArray()
+        val labelsArray = trainingLabels.toIntArray()
+
+        Utils.saveDoubleArrayToFile(featuresArray, filesDir, currentProfile, "gesture")
+        Utils.saveIntArrayToFile(labelsArray, filesDir, currentProfile, "gesture")
+
+
+        //Log training features size
         Log.d("BBBBBB", "Training Features Size: ${trainingFeatures.size}")
     }
 
@@ -207,25 +246,6 @@ class GestureTrainingActivity : AppCompatActivity() {
         return windows
     }
 
-
-    fun trainKNNModel(features: Array<DoubleArray>, labels: IntArray, k: Int): KNN<DoubleArray> {
-        return KNN.fit(features, labels, k, EuclideanDistance())
-    }
-
-    fun saveKNNModel(model: KNN<DoubleArray>) {
-        // Create a directory to store models
-        val directory = File(filesDir, "$currentProfile/models")
-        if (!directory.exists()) {
-            directory.mkdirs()
-        }
-
-        val file = File(filesDir, "$currentProfile/models/knn_model")
-        // Create the file if it doesn't exist
-        if (!file.exists()) {
-            file.createNewFile() // Create the file if it doesn't exist
-        }
-        ObjectOutputStream(FileOutputStream(file)).use { it.writeObject(model) }
-    }
 
     fun extractSegmentAroundPeak(window: DoubleArray): DoubleArray {
         val segmentDuration = 0.4
@@ -251,28 +271,70 @@ class GestureTrainingActivity : AppCompatActivity() {
         return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
     }
 
-    fun euclideanDistance(signal1: DoubleArray, signal2: DoubleArray): Double {
-        var sum = 0.0
-        for (i in signal1.indices) {
-            sum += Math.pow(signal1[i] - signal2[i], 2.0)
+    private fun plotAudioSignal(audioSignal: DoubleArray, title: String, color: Int) {
+        // Step 1: Create an XYSeries to hold the data
+        val series: XYSeries = object : XYSeries {
+            override fun size(): Int {
+                return audioSignal.size
+            }
+
+            override fun getX(i: Int): Number {
+                return i // X values will just be the indices of the signal
+            }
+
+            override fun getY(i: Int): Number {
+                return audioSignal[i] // Y values are the actual audio signal values
+            }
+
+            override fun getTitle(): String {
+                return title
+            }
         }
-        return Math.sqrt(sum)
+
+        // Step 2: Create a formatter to style the plot (line style, color, etc.)
+        val seriesFormat = LineAndPointFormatter(
+            color,
+            null, // Point color (none in this case)
+            null, // Fill color (none in this case)
+            null  // Background color (none)
+        )
+
+        // Step 3: Add the series to the plot
+        plot.addSeries(series, seriesFormat)
+
+        // Step 4: Customize plot properties (optional)
+//        plot.title = "Audio Signal Plot"  // Title for the plot
+//        plot.domainLabel = "Time" // Label for the X axis
+//        plot.rangeLabel = "Amplitude" // Label for the Y axis
+
+        // Step 5: Adjust the range and domain of the plot
+        // Y - AXIS
+        val minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
+        val maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
+
+//      Add a small buffer around the data to ensure it doesn't touch the axis edges
+        val padding = 0.1 * (maxValue - minValue)  // 10% padding
+        plot.setRangeBoundaries(
+            minValue - padding,
+            maxValue + padding,
+            BoundaryMode.FIXED
+        ) // Y-axis range
+
+
+        // X - AXIS
+        plot.setDomainBoundaries(
+            0,
+            audioSignal.size.toFloat(),
+//            1400.0,
+            BoundaryMode.FIXED
+        ) // Set X-axis range based on the signal size
+
+        // Optional: Customize grid lines, axis labels, etc.
+//        plot.setGridPadding(50, 50, 50, 50) // Set padding around the plot
+
+        // Step 6: Redraw the plot to reflect changes
+        plot.redraw()
     }
-
-    fun cosineSimilarity(signal1: DoubleArray, signal2: DoubleArray): Double {
-        var dotProduct = 0.0
-        var normSignal1 = 0.0
-        var normSignal2 = 0.0
-
-        for (i in signal1.indices) {
-            dotProduct += signal1[i] * signal2[i]
-            normSignal1 += signal1[i] * signal1[i]
-            normSignal2 += signal2[i] * signal2[i]
-        }
-
-        return dotProduct / (Math.sqrt(normSignal1) * Math.sqrt(normSignal2))
-    }
-
 }
 
 class GestureScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
