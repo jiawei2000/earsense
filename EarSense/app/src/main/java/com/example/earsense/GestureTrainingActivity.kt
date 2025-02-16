@@ -143,7 +143,6 @@ class GestureTrainingActivity : AppCompatActivity() {
 
                 val extractedSegment = extractSegmentAroundPeak(lowpassSegment)
 
-
                 //Apply FTT to segment
                 // FFT expects FloatArray
                 val floatSegment = extractedSegment.map { it.toFloat() }.toFloatArray()
@@ -153,7 +152,6 @@ class GestureTrainingActivity : AppCompatActivity() {
                 // Add to training features
                 // Smile KNN Expects DoubleArray
                 val doubleSegment = floatSegment.map { it.toDouble() }.toDoubleArray()
-
 
                 if (isDebug == 3) {
                     plotAudioSignal(doubleSegment, "ftt", Color.RED)
@@ -221,9 +219,6 @@ class GestureTrainingActivity : AppCompatActivity() {
         Utils.saveDoubleArrayToFile(featuresArray, filesDir, currentProfile, "gesture")
         Utils.saveIntArrayToFile(labelsArray, filesDir, currentProfile, "gesture")
 
-
-        //Log training features size
-        Log.d("BBBBBB", "Training Features Size: ${trainingFeatures.size}")
     }
 
     fun splitIntoWindows(audioData: DoubleArray, samplingRate: Int): List<DoubleArray> {
@@ -245,7 +240,6 @@ class GestureTrainingActivity : AppCompatActivity() {
         }
         return windows
     }
-
 
     fun extractSegmentAroundPeak(window: DoubleArray): DoubleArray {
         val segmentDuration = 0.4

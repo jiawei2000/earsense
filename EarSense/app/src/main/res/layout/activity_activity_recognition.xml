@@ -37,15 +37,31 @@
         app:layout_constraintTop_toBottomOf="@id/materialToolbar" />
 
     <com.androidplot.xy.XYPlot
-        android:id="@+id/plot"
+        android:id="@+id/plot1"
         style="@style/APDefacto.Light"
         android:layout_width="match_parent"
-        android:layout_height="500dp"
+        android:layout_height="250dp"
         android:layout_marginTop="10dp"
         app:domainTitle=""
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textPrediction"
+        app:lineLabelRotationBottom="-45"
+        app:lineLabels="left|bottom"
+        app:rangeTitle=""
+        app:title=""
+        />
+
+    <com.androidplot.xy.XYPlot
+        android:id="@+id/plot2"
+        style="@style/APDefacto.Dark"
+        android:layout_width="match_parent"
+        android:layout_height="250dp"
+        android:layout_marginTop="10dp"
+        app:domainTitle=""
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/plot1"
         app:lineLabelRotationBottom="-45"
         app:lineLabels="left|bottom"
         app:rangeTitle=""

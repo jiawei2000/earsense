@@ -38,7 +38,8 @@ class gestureTrainingFragment : Fragment() {
     )
     var audioRecord: AudioRecord? = null
     var waveFormView: WaveFormView? = null
-    var audioManager: AudioManager? = null
+
+    lateinit var audioManager: AudioManager
 
     var locationToTap = ""
     var verticalBias = "0.0"
@@ -74,26 +75,6 @@ class gestureTrainingFragment : Fragment() {
             height = args.getString("height").toString()
             instruction = args.getString("instruction").toString()
         }
-
-        audioManager = requireContext().getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        var bluetoothDevice: AudioDeviceInfo? = null
-
-        //Select bluetooth earbuds as audio source
-        for (device in audioManager!!.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-            //Log all devices
-//            Log.d("Device", device.productName.toString())
-            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
-                bluetoothDevice = device
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    audioManager!!.setCommunicationDevice(bluetoothDevice)
-                } else {
-                    audioManager!!.startBluetoothSco()
-                }
-                audioManager!!.setBluetoothScoOn(true)
-                break
-            }
-        }
-
     }
 
     private fun startRecording() {
@@ -146,10 +127,7 @@ class gestureTrainingFragment : Fragment() {
                     val readResult = audioRecord?.read(audioData, 0, audioData.size)
 
                     if (readResult != null && readResult > 0) {
-                        //Calculate amplitude
-                        val amplitude = audioData.maxOrNull()
-                        waveFormView!!.addAmplitude(amplitude!!.toFloat())
-
+                        //TODO add new waveform
 
                         //Save to file
                         val byteArray = Utils.shortArrayToByteArray(audioData)
@@ -172,8 +150,8 @@ class gestureTrainingFragment : Fragment() {
             waveFormView!!.clear()
             outputStream.flush()
             outputStream.close()
-            audioManager?.stopBluetoothSco()
-            audioManager?.isBluetoothScoOn = false
+            audioManager.stopBluetoothSco()
+            audioManager.isBluetoothScoOn = false
         } catch (e: RuntimeException) {
             e.printStackTrace()
         }
@@ -198,6 +176,22 @@ class gestureTrainingFragment : Fragment() {
         countDownTimer?.start()
     }
 
+    fun setRecordingDeviceToBluetooth(context: Context) {
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        for (device in audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.setCommunicationDevice(device)
+                } else {
+                    audioManager.startBluetoothSco()
+                }
+                audioManager.setBluetoothScoOn(true)
+                break
+            }
+        }
+    }
+
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -214,6 +208,7 @@ class gestureTrainingFragment : Fragment() {
         // Start recording when the button is clicked
         val buttonStartRecording: Button = view.findViewById(R.id.buttonStart) as Button
         buttonStartRecording.setOnClickListener {
+            setRecordingDeviceToBluetooth(requireContext())
             startRecording()
         }
 

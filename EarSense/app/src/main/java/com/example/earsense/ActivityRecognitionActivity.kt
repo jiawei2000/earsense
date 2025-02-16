@@ -1,12 +1,17 @@
 package com.example.earsense
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
@@ -34,19 +39,22 @@ class ActivityRecognitionActivity : AppCompatActivity() {
         audioEncoding
     )
 
-    var audioRecord: AudioRecord? = null
-    var audioManager: AudioManager? = null
+    lateinit var audioRecord: AudioRecord
+    lateinit var audioManager: AudioManager
 
     lateinit var currentProfile: String
 
     lateinit var predictionTextView: TextView
-    lateinit var plot: XYPlot
+    lateinit var plot1: XYPlot
+    lateinit var plot2: XYPlot
 
     var plotMinY = 0.0
     var plotMaxY = 0.0
 
     lateinit var trainingFeatures: Array<DoubleArray>
     lateinit var trainingLabels: IntArray
+
+    val activityTypes = arrayOf("Walking", "Running", "Speaking", "Still")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +81,10 @@ class ActivityRecognitionActivity : AppCompatActivity() {
         // Start Listening Button
         val buttonStart: Button = findViewById(R.id.buttonStart)
         buttonStart.setOnClickListener {
+            // Load training features and labels
+            trainingFeatures = Utils.readDoubleArrayFromFile(filesDir, currentProfile, "activity")
+            trainingLabels = Utils.readIntArrayFromFile(filesDir, currentProfile, "activity")
+
             startRecording()
         }
 
@@ -90,7 +102,8 @@ class ActivityRecognitionActivity : AppCompatActivity() {
         }
 
         // Plot
-        plot = findViewById(R.id.plot)
+        plot1 = findViewById(R.id.plot1)
+        plot2 = findViewById(R.id.plot2)
 
         // Prediction TextView
         predictionTextView = findViewById(R.id.textPrediction)
@@ -126,6 +139,8 @@ class ActivityRecognitionActivity : AppCompatActivity() {
                     )
                 }
 
+                setRecordingDeviceToBluetooth(this)
+
                 audioRecord = AudioRecord(
                     audioSource,
                     sampleRate,
@@ -134,38 +149,62 @@ class ActivityRecognitionActivity : AppCompatActivity() {
                     bufferSize
                 )
 
-                audioRecord?.startRecording()
+                audioRecord.startRecording()
 
                 var runningAudioData = mutableListOf<Double>()
-                var runningLowPass = mutableListOf<Double>()
 
                 var predictions = mutableListOf<Int>()
 
-                while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val audioData = ShortArray(bufferSize)
 
-                    val readResult = audioRecord?.read(audioData, 0, audioData.size)
+                    val readResult = audioRecord.read(audioData, 0, audioData.size)
 
                     if (readResult != null && readResult > 0) {
 
                         val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
 
-                        //Calculate amplitude
-                        val amplitude = doubleAudioData.maxOrNull() ?: 0.0
                         runningAudioData.addAll(doubleAudioData.toList())
 
-                        val lowpassSegment = DoubleArray(doubleAudioData.size)
-                        // Apply low-pass filter
-                        val filter = PassFilter(
-                            50.toFloat(),
-                            sampleRate,
-                            PassFilter.PassType.Lowpass,
-                            1.toFloat()
-                        )
-                        for (i in doubleAudioData.indices) {
-                            filter.Update(doubleAudioData[i].toFloat())
-                            lowpassSegment[i] = filter.getValue().toDouble()
+                        // Wait for 1 second of audio data
+                        if (runningAudioData.size < sampleRate) {
+                            continue
+                        } else {
+
+                            val runningAudioDataArray = runningAudioData.toDoubleArray()
+
+                            // Calculate energy
+                            val energy = runningAudioDataArray.sumByDouble { Math.abs(it) }
+
+                            // Log training features value
+
+                            // Find which activity has the closest energy value to the current energy
+                            val closestActivity = trainingFeatures.minByOrNull {
+                                Math.abs(it[0] - energy)
+                            }
+
+                            // Prediction is the index of the closest activity
+                            val prediction = trainingLabels[trainingFeatures.indexOf(closestActivity)]
+
+                            // Log closest activity
+                            Log.d("AAAAAAAAAA", "Closest Activity: ${trainingLabels[trainingFeatures.indexOf(closestActivity)]}")
+
+                            runOnUiThread {
+                                plot2.clear()
+                                plotAudioSignal(
+                                    plot2,
+                                    runningAudioDataArray,
+                                    "Audio Signal",
+                                    Color.YELLOW
+                                )
+                                predictionTextView.text = "Prediction: ${activityTypes[prediction]}"
+                            }
+
+
+
+                            runningAudioData = mutableListOf()
                         }
+
 
                     }
 
@@ -178,10 +217,25 @@ class ActivityRecognitionActivity : AppCompatActivity() {
     }
 
     fun stopRecording() {
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioManager?.stopBluetoothSco()
-        audioManager?.isBluetoothScoOn = false
+        audioRecord.stop()
+        audioRecord.release()
+        audioManager.stopBluetoothSco()
+        audioManager.isBluetoothScoOn = false
+    }
+
+    fun setRecordingDeviceToBluetooth(context: Context) {
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        for (device in audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.setCommunicationDevice(device)
+                } else {
+                    audioManager.startBluetoothSco()
+                }
+                audioManager.setBluetoothScoOn(true)
+                break
+            }
+        }
     }
 
     fun extractSegmentAroundPeak(window: DoubleArray, peakIndex: Int): DoubleArray {
@@ -218,8 +272,8 @@ class ActivityRecognitionActivity : AppCompatActivity() {
         return filteredPeaks
     }
 
-    private fun plotAudioSignal(audioSignal: DoubleArray, title: String, color: Int) {
-        // Step 1: Create an XYSeries to hold the data
+    private fun plotAudioSignal(plot: XYPlot, audioSignal: DoubleArray, title: String, color: Int) {
+        // Create an XYSeries to hold the data
         val series: XYSeries = object : XYSeries {
             override fun size(): Int {
                 return audioSignal.size
@@ -238,7 +292,7 @@ class ActivityRecognitionActivity : AppCompatActivity() {
             }
         }
 
-        // Step 2: Create a formatter to style the plot (line style, color, etc.)
+        // Create a formatter to style the plot (line style, color, etc.)
         val seriesFormat = LineAndPointFormatter(
             color,
             null,
@@ -246,44 +300,32 @@ class ActivityRecognitionActivity : AppCompatActivity() {
             null
         )
 
-        // Step 3: Add the series to the plot
+        // Add the series to the plot
         plot.addSeries(series, seriesFormat)
 
-
-        // Step 5: Adjust the range and domain of the plot
-        // Y - AXIS
+        // Adjust the range and domain of the plot
+        // Y-AXIS
         val minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
         val maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
-
-        if (minValue < plotMinY) {
-            plotMinY = minValue
-        }
-
-        if (maxValue > plotMaxY) {
-            plotMaxY = maxValue
-        }
 
 //        val minValue = -17000
 //        val maxValue = 19000
 
-//      Add a small buffer around the data to ensure it doesn't touch the axis edges
-        val padding = 0.1 * (plotMaxY - plotMinY)  // 10% padding
+        // Add a small buffer around the data to ensure it doesn't touch the axis edges
+        val padding = 0.1 * (maxValue - minValue)  // 10% padding
         plot.setRangeBoundaries(
-            plotMinY - padding,
-            plotMaxY + padding,
+            minValue - padding,
+            maxValue + padding,
             BoundaryMode.FIXED
-        ) // Y-axis range
+        )
 
-
-        // X - AXIS
+        // X-AXIS
         plot.setDomainBoundaries(
             0,
-//            audioSignal.size.toFloat(),
-            500.0,
+            audioSignal.size.toFloat(),
             BoundaryMode.FIXED
-        ) // Set X-axis range based on the signal size
+        )
 
-        // Step 6: Redraw the plot to reflect changes
         plot.redraw()
     }
 }

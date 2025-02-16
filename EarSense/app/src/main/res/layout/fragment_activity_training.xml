@@ -57,30 +57,14 @@
         android:id="@+id/plot1"
         style="@style/APDefacto.Light"
         android:layout_width="match_parent"
-        android:layout_height="250dp"
+        android:layout_height="200dp"
         android:layout_marginTop="10dp"
         app:domainTitle=""
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textTimer"
         app:lineLabelRotationBottom="-45"
-        app:lineLabels="left|bottom"
-        app:rangeTitle=""
-        app:title=""
-        />
-
-    <com.androidplot.xy.XYPlot
-        android:id="@+id/plot2"
-        style="@style/APDefacto.Dark"
-        android:layout_width="match_parent"
-        android:layout_height="250dp"
-        android:layout_marginTop="10dp"
-        app:domainTitle=""
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/plot1"
-        app:lineLabelRotationBottom="-45"
-        app:lineLabels="left|bottom"
+        app:lineLabels=""
         app:rangeTitle=""
         app:title=""
         />
@@ -94,7 +78,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.15"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/plot2" />
+        app:layout_constraintTop_toBottomOf="@id/plot1" />
 
     <Button
         android:id="@+id/buttonStop"
@@ -105,6 +89,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.85"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/plot2" />
+        app:layout_constraintTop_toBottomOf="@id/plot1" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
