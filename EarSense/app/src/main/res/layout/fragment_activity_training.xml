@@ -46,9 +46,9 @@
         android:layout_marginTop="10dp"
         android:text="20"
         android:textAlignment="center"
+        android:textColor="@color/red"
         android:textSize="25sp"
         android:textStyle="bold"
-        android:textColor="@color/red"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/textInstructions" />
@@ -66,8 +66,7 @@
         app:lineLabelRotationBottom="-45"
         app:lineLabels=""
         app:rangeTitle=""
-        app:title=""
-        />
+        app:title="" />
 
     <Button
         android:id="@+id/buttonStart"

@@ -2,6 +2,7 @@ package com.example.earsense
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -19,10 +20,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.github.psambit9791.jdsp.filter.FIRWin1
+import com.androidplot.xy.BoundaryMode
+import com.androidplot.xy.LineAndPointFormatter
+import com.androidplot.xy.XYPlot
+import com.androidplot.xy.XYSeries
 import com.github.psambit9791.jdsp.signal.peaks.FindPeak
-import com.github.psambit9791.jdsp.transform.Hilbert
 import com.google.android.material.appbar.MaterialToolbar
+import org.jtransforms.fft.FloatFFT_1D
 import java.io.IOException
 
 class StepTrackerActivity : AppCompatActivity() {
@@ -38,10 +42,10 @@ class StepTrackerActivity : AppCompatActivity() {
     lateinit var audioRecord: AudioRecord
     lateinit var audioManager: AudioManager
 
-    lateinit var waveFormView: WaveFormView
+    lateinit var plot: XYPlot
+    lateinit var plot2: XYPlot
 
     var stepCount = 0
-    var startTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +66,7 @@ class StepTrackerActivity : AppCompatActivity() {
         // Start Listening Button
         val startListeningButton: Button = findViewById(R.id.buttonStart)
         startListeningButton.setOnClickListener {
+            setRecordingDeviceToBluetooth(this)
             startRecording()
         }
 
@@ -81,11 +86,12 @@ class StepTrackerActivity : AppCompatActivity() {
         //Debug Button
         val debugButton: Button = findViewById(R.id.buttonDebug)
         debugButton.setOnClickListener {
-            changeIcon("walking")
+//            changeIcon("walking")
         }
 
-        // Waveform View
-        waveFormView = findViewById(R.id.waveFormView)
+        // Plot
+        plot = findViewById(R.id.plot1)
+        plot2 = findViewById(R.id.plot2)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -99,16 +105,16 @@ class StepTrackerActivity : AppCompatActivity() {
         stopRecording()
     }
 
-    fun changeIcon(action: String) {
-        val actionImageView = findViewById<ImageView>(R.id.imageAction)
-        val iconRes = when (action) {
-            "walking" -> R.drawable.walking
-            "running" -> R.drawable.running
-            "standing" -> R.drawable.standing
-            else -> return
-        }
-        actionImageView.setImageResource(iconRes)
-    }
+//    fun changeIcon(action: String) {
+//        val actionImageView = findViewById<ImageView>(R.id.image)
+//        val iconRes = when (action) {
+//            "walking" -> R.drawable.walking
+//            "running" -> R.drawable.running
+//            "standing" -> R.drawable.standing
+//            else -> return
+//        }
+//        actionImageView.setImageResource(iconRes)
+//    }
 
     fun updateStepCount() {
         findViewById<TextView>(R.id.textSteps)?.let { textView ->
@@ -132,110 +138,106 @@ class StepTrackerActivity : AppCompatActivity() {
                     )
                 }
 
-                // Select Bluetooth device
-                audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                for (device in audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-                    if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            audioManager.setCommunicationDevice(device)
-                        } else {
-                            audioManager.startBluetoothSco()
-                        }
-                        audioManager.setBluetoothScoOn(true)
-                        break
-                    }
-                }
-
                 audioRecord = AudioRecord(
                     audioSource, sampleRate, channelConfig, audioEncoding, bufferSize
                 )
                 audioRecord.startRecording()
 
+                var bufferCount = 0
                 var runningAudioData = mutableListOf<Double>()
-
-                var lastPeakTime = 0L
+                var recordedPeaks = mutableListOf<Int>()
 
                 while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val audioData = ShortArray(bufferSize)
 
                     val readResult = audioRecord.read(audioData, 0, audioData.size)
 
-                    //Log current time
-                    startTime = System.currentTimeMillis()
-
                     if (readResult > 0) {
                         //Process Audio Data
+                        bufferCount++
                         val doubleAudioArray = audioData.map { it.toDouble() }.toDoubleArray()
 
-                        // Apply Low pass filter 50hz low pass filter
-                        val filteredAudioData = applyLowPassFilter(
-                            doubleAudioArray, sampleRate.toDouble(), 50.0
-                        )
-
-
-                        val amplitude = filteredAudioData.max() * 1000
-                        waveFormView.addAmplitude(amplitude.toFloat())
+                        val lowpassSegment = DoubleArray(doubleAudioArray.size)
+                        // Apply low-pass filter
+                        val filter =
+                            PassFilter(
+                                50.toFloat(),
+                                sampleRate,
+                                PassFilter.PassType.Lowpass,
+                                1.toFloat()
+                            )
+                        for (i in doubleAudioArray.indices) {
+                            filter.Update(doubleAudioArray[i].toFloat())
+                            lowpassSegment[i] = filter.getValue().toDouble()
+                        }
 
                         // Append to running audio data
-                        runningAudioData.addAll(filteredAudioData.toList())
+                        runningAudioData.addAll(lowpassSegment.toList())
+                        val runningAudioArray = runningAudioData.toDoubleArray()
+
+                        runOnUiThread {
+                            plot.clear()
+                            plotAudioSignal(plot, runningAudioArray, "Audio Signal", Color.RED)
+                        }
 
                         // Only process 1 second of audio data
                         if (runningAudioData.size < sampleRate) {
                             continue
                         }
 
-                        // Detect peaks and troughs
-                        val peaks = findPeaks(runningAudioData.toDoubleArray(), 0.7)
+                        // Remove oldest buffer if audio signal too long
+                        runningAudioData = runningAudioData.drop(bufferSize).toMutableList()
 
-                        if (peaks.size < 2) {
-                            runOnUiThread() {
-                                changeIcon("standing")
+
+                        val peaks = findPeaks(runningAudioArray, 700.0)
+                        var lastPeak = 0
+                        var lastValidPeak = 0
+
+                        if (peaks.isNotEmpty()) {
+                            // Apply fft and check cutoff for speaking
+                            val speakingFFTCutoff = 120
+                            val floatFFTSegment =
+                                runningAudioData.map { it.toFloat() }.toFloatArray()
+                            val fft = FloatFFT_1D(floatFFTSegment.size.toLong())
+                            fft.realForward(floatFFTSegment)
+                            val doubleFFTAudioData =
+                                floatFFTSegment.map { it.toDouble() }.toDoubleArray()
+                            // find index of maximum value
+                            val maxIndex =
+                                doubleFFTAudioData.withIndex().maxByOrNull { it.value }?.index
+
+                            runOnUiThread {
+                                plot2.clear()
+                                plotAudioSignal(plot2, doubleFFTAudioData, "FFT", Color.YELLOW)
                             }
-                        } else {
-                            for (peak in peaks) {
-                                val timeFromLastPeak = System.currentTimeMillis() - lastPeakTime
-                                val peakAmplitude = runningAudioData[peak]
-                                Log.d("AAAAAAAAA", "Peak: $peakAmplitude, Time: $timeFromLastPeak")
 
-                                if (timeFromLastPeak > 5) {
-                                    runOnUiThread() {
-                                        stepCount++
-                                        updateStepCount()
-                                        if (timeFromLastPeak > 200) {
-                                            changeIcon("walking")
-                                        } else {
-                                            changeIcon("running")
-                                        }
-                                    }
-                                    lastPeakTime = System.currentTimeMillis()
-                                }
+                            if (maxIndex != null && maxIndex > speakingFFTCutoff) {
+                                continue
                             }
                         }
 
-//                        var lastPeak = 0
+                        for (peak in peaks) {
+                            val distance = peak - lastPeak
+                            lastPeak = peak
+                            // Only allow peak if not too close to last peak and at the edge of audioData or peak is repeated
+                            if (distance > 3000 && peak > 3000 && peak < 13000) {
+                                lastValidPeak = peak
+                            }
+                        }
 
-//                        for (peak in peaks) {
-//                            //Log distance to last peak
-//                            Log.d("AAAAAAAAA", "Distance: ${peak - lastPeak}")
-//
-//                            //log peak amplitude
-//                            Log.d("AAAAAAAAA", "Peak: ${runningAudioData[peak]}")
-//
-//                            // Check minimum distance between peaks
-//                            if (peak - lastPeak > 0.3 * sampleRate) {
-//                                // Run in ui thread
-//                                lastPeak = peak
-//                                runOnUiThread {
-//                                    stepCount++
-//                                    updateStepCount()
-//
-//                                }
-//                            }
-//                        }
-                        runningAudioData = mutableListOf<Double>()
-
+                        if (lastValidPeak != 0) {
+                            val adjustedPeakIndex = lastValidPeak + (bufferCount * bufferSize)
+                            if (adjustedPeakIndex !in recordedPeaks) {
+                                recordedPeaks.add(adjustedPeakIndex)
+                                stepCount++
+                                runOnUiThread {
+                                    updateStepCount()
+                                }
+                            }
+                        }
                     }
                 }
+
             } catch (e: IOException) {
                 Log.d("ERROR in StepTracker", e.toString())
             }
@@ -249,49 +251,22 @@ class StepTrackerActivity : AppCompatActivity() {
         }
     }
 
-    fun applyLowPassFilter(
-        doubleAudioData: DoubleArray, samplingRate: Double, cutoffFreq: Double
-    ): DoubleArray {
-
-        // Define filter parameters
-        val filterWidth = 4.0
-        val rippleValue = 60.0
-        val cutoff = doubleArrayOf(cutoffFreq)  // Cutoff frequency
-
-        // Create FIR windowed filter
-        val fw = FIRWin1(rippleValue, filterWidth, samplingRate)
-
-        // Compute FIR filter coefficients
-        val coefficients = fw.computeCoefficients(cutoff, FIRWin1.FIRfilterType.LOWPASS, true)
-
-        // Apply FIR filter
-        val filteredSignal = fw.firfilter(coefficients, doubleAudioData)
-
-        // Convert back to FloatArray
-        return filteredSignal
-    }
-
-    fun computeHilbertEnvelopes(signal: DoubleArray): Pair<DoubleArray, DoubleArray> {
-        val hilbert = Hilbert(signal)
-
-        Log.d("BBBBBBBBB", "reached AA")
-
-        hilbert.transform(true)  // Apply Hilbert transform
-
-        Log.d("BBBBBBBBB", "reached BB")
-
-        val analyticSignal = hilbert.output  // Get the analytic signal
-
-        Log.d("BBBBBBBBB", "reached CC")
-
-        val upperEnvelope = analyticSignal.map { it[0] }.toDoubleArray()
-        val lowerEnvelope = analyticSignal.map { it[1] }.toDoubleArray()
-
-        return Pair(upperEnvelope, lowerEnvelope)
+    fun setRecordingDeviceToBluetooth(context: Context) {
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        for (device in audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.setCommunicationDevice(device)
+                } else {
+                    audioManager.startBluetoothSco()
+                }
+                audioManager.setBluetoothScoOn(true)
+                break
+            }
+        }
     }
 
     fun findPeaks(audioData: DoubleArray, minPeakAmplitude: Double): IntArray {
-
         val fp = FindPeak(audioData)
 
         // Detect peaks
@@ -299,29 +274,65 @@ class StepTrackerActivity : AppCompatActivity() {
 
         //Filter peaks based on minimum amplitude
         val filteredPeaks = peaks.filter { audioData[it] >= minPeakAmplitude }.toIntArray()
-
-        // Detect troughs
-        val troughs = fp.detectTroughs().peaks
-
-//        val minPeakHeight = 1000.0  // Minimum peak height
-//        val minDistance = 300  // Minimum distance between peaks
-//
-//        // Filter peaks based on minimum height
-//        val filteredPeaks = peaks.filter { signal[it] >= minPeakHeight }.toIntArray()
-//
-//
-//        // Filter peaks based on minimum distance between peaks
-//        val filteredPeaksByDistance = mutableListOf<Int>()
-//        var lastPeakIndex = -minDistance  // Initialize with a large negative value
-//
-//        for (peak in filteredPeaks) {
-//            if (peak - lastPeakIndex >= minDistance) {
-//                filteredPeaksByDistance.add(peak)
-//                lastPeakIndex = peak
-//            }
-//        }
-
         return filteredPeaks
     }
+
+    private fun plotAudioSignal(plot: XYPlot, audioSignal: DoubleArray, title: String, color: Int) {
+        // Create an XYSeries to hold the data
+        val series: XYSeries = object : XYSeries {
+            override fun size(): Int {
+                return audioSignal.size
+            }
+
+            override fun getX(i: Int): Number {
+                return i // X values will just be the indices of the signal
+            }
+
+            override fun getY(i: Int): Number {
+                return audioSignal[i] // Y values are the actual audio signal values
+            }
+
+            override fun getTitle(): String {
+                return title
+            }
+        }
+
+        // Create a formatter to style the plot (line style, color, etc.)
+        val seriesFormat = LineAndPointFormatter(
+            color,
+            null,
+            null,
+            null
+        )
+
+        // Add the series to the plot
+        plot.addSeries(series, seriesFormat)
+
+        // Adjust the range and domain of the plot
+        // Y-AXIS
+        var minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
+        var maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
+
+//        val minValue = -8000
+//        val maxValue = 10000
+
+        // Add a small buffer around the data to ensure it doesn't touch the axis edges
+        val padding = 0.1 * (maxValue - minValue)  // 10% padding
+        plot.setRangeBoundaries(
+            minValue - padding,
+            maxValue + padding,
+            BoundaryMode.FIXED
+        )
+
+        // X-AXIS
+        plot.setDomainBoundaries(
+            0,
+            audioSignal.size.toFloat(),
+            BoundaryMode.FIXED
+        )
+
+        plot.redraw()
+    }
+
 
 }

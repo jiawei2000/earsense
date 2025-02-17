@@ -18,7 +18,9 @@ import com.androidplot.xy.BoundaryMode
 import com.androidplot.xy.LineAndPointFormatter
 import com.androidplot.xy.XYPlot
 import com.androidplot.xy.XYSeries
+import com.github.psambit9791.jdsp.signal.peaks.FindPeak
 import com.google.android.material.appbar.MaterialToolbar
+import org.jtransforms.fft.FloatFFT_1D
 import java.io.File
 
 val activityTypes = arrayOf("Walking", "Running", "Speaking", "Still")
@@ -34,6 +36,9 @@ class ActivityTrainingActivity : AppCompatActivity() {
     lateinit var currentProfile: String
 
     lateinit var plot: XYPlot
+
+    var maxY = 0.0
+    var minY = 0.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,9 +94,11 @@ class ActivityTrainingActivity : AppCompatActivity() {
 
         // Plot
         plot = findViewById(R.id.plot)
-        plot.graph.marginLeft = 0f
-        plot.graph.marginBottom = 0f
-        plot.legend.isVisible = false
+        plot.graph.marginLeft = 20f
+        plot.graph.paddingLeft = 100f
+
+//        plot.graph.marginBottom = 0f
+//        plot.legend.isVisible = false
 
         currentProfile = Utils.getCurrentProfile(this)
 
@@ -103,6 +110,7 @@ class ActivityTrainingActivity : AppCompatActivity() {
     }
 
     fun trainModel() {
+        val audioDatas = mutableListOf<DoubleArray>()
         val trainingFeatures = mutableListOf<DoubleArray>()
         val trainingLabels = mutableListOf<Int>()
 
@@ -115,37 +123,198 @@ class ActivityTrainingActivity : AppCompatActivity() {
 
             //Process Audio Data
             val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
-            val windows = splitIntoWindows(doubleAudioData, sampleRate)
+
+//            val lowpassAudioData = DoubleArray(doubleAudioData.size)
+            // Apply low-pass filter
+//            val filter =
+//                PassFilter(50.toFloat(), sampleRate, PassFilter.PassType.Lowpass, 1.toFloat())
+//            for (i in doubleAudioData.indices) {
+//                filter.Update(doubleAudioData[i].toFloat())
+//                lowpassAudioData[i] = filter.getValue().toDouble()
+//            }
+
+            audioDatas.add(doubleAudioData)
 
             var totalEnergy = 0.0
+            var totalMax = 0.0
+            var totalVariance = 0.0
+            var totalFFT = 0.0
+
+            val windows = splitIntoWindows(doubleAudioData, sampleRate)
 
             for (window in windows) {
                 // Calculate absolute sum of all values in the window
-                val energy = window.sumByDouble { Math.abs(it) }
+                val energy = window.sumOf { Math.abs(it) }
                 totalEnergy += energy
 
-//                runOnUiThread {
-//                    plot.clear()
-//                    plotAudioSignal(plot, window, activityName, Color.RED)
-//                }
+                // Calculate max amplitude
+                val maxAmplitude = window.max()
+                totalMax += maxAmplitude
 
+                // Calculate variance
+                val mean = window.average()
+                val variance = window.map { it - mean }.sumOf { it * it }
+                totalVariance += variance
+
+
+                // Apply ftt
+                val floatFFTSegment = window.map { it.toFloat() }.toFloatArray()
+                val fft = FloatFFT_1D(floatFFTSegment.size.toLong())
+                fft.realForward(floatFFTSegment)
+                val doubleFFTAudioData = floatFFTSegment.map { it.toDouble() }.toDoubleArray()
+
+                // find index of maximum value
+                val maxIndex = doubleFFTAudioData.withIndex().maxByOrNull { it.value }?.index
+                totalFFT += maxIndex ?: 0
             }
 
             // Calculate average energy
             val averageEnergy = totalEnergy / windows.size
 
+            // Calulate average max amplitude
+            val averageMax = totalMax / windows.size
+
+            // Calculate average variance
+            val averageVariance = totalVariance / windows.size
+
+            // Calculate average FFT
+            val averageFFT = totalFFT / windows.size
+
+            // Log averageFFT
+            Log.d("AAAAAAAA", "Average FFT: $averageFFT")
+
             trainingFeatures.add(doubleArrayOf(averageEnergy))
             trainingLabels.add(activityTypes.indexOf(activityName))
-
         }
-        // Log training features
-        Log.d("AAAAAAA", "Training Features: $trainingFeatures")
 
         // Save data to file
         val featuresArray = trainingFeatures.toTypedArray()
         val labelsArray = trainingLabels.toIntArray()
         Utils.saveDoubleArrayToFile(featuresArray, filesDir, currentProfile, "activity")
         Utils.saveIntArrayToFile(labelsArray, filesDir, currentProfile, "activity")
+
+        // Test data with index
+        var totalCorrect = 0
+        var totalCount = 0
+
+
+        val walkingData = audioDatas[0]
+        // Dive walking Data into
+        val walkingWindows = splitIntoWindows(walkingData, 1280)
+        //Log no winodws
+        Log.d("AAAAAAA", "Windows size: ${walkingWindows.size}")
+        val usedPeakAmplitudes = mutableListOf<Double>()
+        var stepCount = 0
+
+        for (window in walkingWindows) {
+            val lowpassSegment = DoubleArray(window.size)
+            // Apply low-pass filter
+            val filter =
+                PassFilter(
+                    50.toFloat(),
+                    sampleRate,
+                    PassFilter.PassType.Lowpass,
+                    1.toFloat()
+                )
+            for (i in window.indices) {
+                filter.Update(window[i].toFloat())
+                lowpassSegment[i] = filter.getValue().toDouble()
+            }
+
+            val peaks = findPeaks(lowpassSegment, 1500.0)
+
+            Log.d("AAAAAAAA", "Peaks: ${peaks.toList()}")
+
+
+            var lastPeak = 0
+            var lastValidPeak = 0
+
+            for (peak in peaks) {
+                val distance = peak - lastPeak
+                lastPeak = peak
+                // Only allow peak if not too close to last peak and at the edge of audioData or peak is repeated
+                if (distance > 2000 && peak > 10000 && peak < 37360) {
+                    lastValidPeak = peak
+                }
+            }
+
+            if (lastValidPeak != 0) {
+                // Check if peak is repeated
+                if (usedPeakAmplitudes.contains(window[lastValidPeak])) {
+                    continue
+                } else {
+                    stepCount++
+                    usedPeakAmplitudes.add(window[lastValidPeak])
+                }
+            }
+
+        }
+        Log.d("AAAAAAA", "Steps: $stepCount")
+
+        plotAudioSignal(plot, walkingData, "Walking", Color.RED)
+
+
+
+        for (i in audioDatas.indices) {
+            // Split into windows
+            val windows = splitIntoWindows(audioDatas[i], sampleRate)
+            for (window in windows) {
+                totalCount++
+                val prediction = makePrediction(window)
+                if (prediction == i) {
+                    totalCorrect++
+                }
+//                Log.d(
+//                    "AAAAAAAAA",
+//                    "Actual: ${activityTypes[i]}, Prediction: ${activityTypes[prediction]}"
+//                )
+            }
+        }
+
+        val accuracy = totalCorrect.toDouble() / totalCount
+        Log.d("AAAAAAAAA", "Accuracy: $accuracy")
+
+    }
+
+    fun makePrediction(audioData: DoubleArray): Int {
+        // Calculate energy
+        val energy = audioData.sumOf { Math.abs(it) }
+        val stillEnergyCutOff = 3000000.0
+
+        // Apply ftt
+        val speakingFFTCutoff = 120
+
+        val floatFFTSegment = audioData.map { it.toFloat() }.toFloatArray()
+        val fft = FloatFFT_1D(floatFFTSegment.size.toLong())
+        fft.realForward(floatFFTSegment)
+        val doubleFFTAudioData = floatFFTSegment.map { it.toDouble() }.toDoubleArray()
+        // find index of maximum value
+        val maxIndex = doubleFFTAudioData.withIndex().maxByOrNull { it.value }?.index
+
+        if (energy < stillEnergyCutOff) {
+            return 3 // Still
+        }
+
+        if (maxIndex != null && maxIndex > speakingFFTCutoff) {
+            return 2 // Speaking
+        }
+
+        if (energy < 10000000) {
+            return 0 // Walking
+        } else {
+            return 1 // Running
+        }
+    }
+
+    fun findPeaks(audioData: DoubleArray, minPeakAmplitude: Double): IntArray {
+        val fp = FindPeak(audioData)
+
+        // Detect peaks
+        val peaks = fp.detectPeaks().peaks
+
+        //Filter peaks based on minimum amplitude
+        val filteredPeaks = peaks.filter { audioData[it] >= minPeakAmplitude }.toIntArray()
+        return filteredPeaks
     }
 
     fun splitIntoWindows(audioData: DoubleArray, samplingRate: Int): List<DoubleArray> {
@@ -201,11 +370,21 @@ class ActivityTrainingActivity : AppCompatActivity() {
 
         // Adjust the range and domain of the plot
         // Y-AXIS
-        val minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
-        val maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
+        var minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
+        var maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
 
 //        val minValue = -17000
 //        val maxValue = 19000
+
+        if (minValue < minY) {
+            minY = minValue
+        }
+        if (maxValue > maxY) {
+            maxY = maxValue
+        }
+
+        minValue = minY
+        maxValue = maxY
 
         // Add a small buffer around the data to ensure it doesn't touch the axis edges
         val padding = 0.1 * (maxValue - minValue)  // 10% padding
@@ -224,7 +403,6 @@ class ActivityTrainingActivity : AppCompatActivity() {
 
         plot.redraw()
     }
-
 }
 
 class ActivityScreenSlidePagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {

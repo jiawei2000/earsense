@@ -26,6 +26,7 @@ import com.androidplot.xy.XYPlot
 import com.androidplot.xy.XYSeries
 import com.github.psambit9791.jdsp.signal.peaks.FindPeak
 import com.google.android.material.appbar.MaterialToolbar
+import org.jtransforms.fft.FloatFFT_1D
 import java.io.IOException
 
 class ActivityRecognitionActivity : AppCompatActivity() {
@@ -153,7 +154,7 @@ class ActivityRecognitionActivity : AppCompatActivity() {
 
                 var runningAudioData = mutableListOf<Double>()
 
-                var predictions = mutableListOf<Int>()
+                var lastPrediction = 0
 
                 while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val audioData = ShortArray(bufferSize)
@@ -170,42 +171,28 @@ class ActivityRecognitionActivity : AppCompatActivity() {
                         if (runningAudioData.size < sampleRate) {
                             continue
                         } else {
-
                             val runningAudioDataArray = runningAudioData.toDoubleArray()
 
-                            // Calculate energy
-                            val energy = runningAudioDataArray.sumByDouble { Math.abs(it) }
-
-                            // Log training features value
-
-                            // Find which activity has the closest energy value to the current energy
-                            val closestActivity = trainingFeatures.minByOrNull {
-                                Math.abs(it[0] - energy)
-                            }
+                            val prediction = makePrediction(runningAudioDataArray)
 
                             // Prediction is the index of the closest activity
-                            val prediction = trainingLabels[trainingFeatures.indexOf(closestActivity)]
+                            if (prediction == lastPrediction) {
+                                runOnUiThread {
+                                    plot2.clear()
+                                    plotAudioSignal(
+                                        plot2,
+                                        runningAudioDataArray,
+                                        "Audio Signal",
+                                        Color.YELLOW
+                                    )
 
-                            // Log closest activity
-                            Log.d("AAAAAAAAAA", "Closest Activity: ${trainingLabels[trainingFeatures.indexOf(closestActivity)]}")
-
-                            runOnUiThread {
-                                plot2.clear()
-                                plotAudioSignal(
-                                    plot2,
-                                    runningAudioDataArray,
-                                    "Audio Signal",
-                                    Color.YELLOW
-                                )
-                                predictionTextView.text = "Prediction: ${activityTypes[prediction]}"
+                                    predictionTextView.text =
+                                        "Prediction: ${activityTypes[prediction]}"
+                                }
                             }
-
-
-
+                            lastPrediction = prediction
                             runningAudioData = mutableListOf()
                         }
-
-
                     }
 
                 }
@@ -217,10 +204,12 @@ class ActivityRecognitionActivity : AppCompatActivity() {
     }
 
     fun stopRecording() {
-        audioRecord.stop()
-        audioRecord.release()
-        audioManager.stopBluetoothSco()
-        audioManager.isBluetoothScoOn = false
+        if (this::audioRecord.isInitialized) {
+            audioRecord.stop()
+            audioRecord.release()
+            audioManager.stopBluetoothSco()
+            audioManager.isBluetoothScoOn = false
+        }
     }
 
     fun setRecordingDeviceToBluetooth(context: Context) {
@@ -238,38 +227,34 @@ class ActivityRecognitionActivity : AppCompatActivity() {
         }
     }
 
-    fun extractSegmentAroundPeak(window: DoubleArray, peakIndex: Int): DoubleArray {
-        val segmentDuration = 0.4
-        val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
+    fun makePrediction(audioData: DoubleArray): Int {
+        // Calculate energy
+        val energy = audioData.sumOf { Math.abs(it) }
+        val stillEnergyCutOff = 3000000.0
 
-        // Calculate segment start and end
-        // extract 0.15 seconds before and 0.25 seconds after the peak
-        var start = peakIndex - (0.15 * sampleRate).toInt()
-        var end = peakIndex + (0.25 * sampleRate).toInt()
+        // Apply ftt
+        val speakingFFTCutoff = 120
 
-        // Handle out-of-bounds cases
-        if (start < 0) {
-            end -= start // Extend end
-            start = 0
+        val floatFFTSegment = audioData.map { it.toFloat() }.toFloatArray()
+        val fft = FloatFFT_1D(floatFFTSegment.size.toLong())
+        fft.realForward(floatFFTSegment)
+        val doubleFFTAudioData = floatFFTSegment.map { it.toDouble() }.toDoubleArray()
+        // find index of maximum value
+        val maxIndex = doubleFFTAudioData.withIndex().maxByOrNull { it.value }?.index
+
+        if (energy < stillEnergyCutOff) {
+            return 3 // Still
         }
-        if (end > window.size) {
-            start -= (end - window.size) // Extend start
-            end = window.size
+
+        if (maxIndex != null && maxIndex > speakingFFTCutoff) {
+            return 2 // Speaking
         }
 
-        // Extract the segment
-        return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
-    }
-
-    fun findPeaks(audioData: DoubleArray, minPeakAmplitude: Double): IntArray {
-        val fp = FindPeak(audioData)
-
-        // Detect peaks
-        val peaks = fp.detectPeaks().peaks
-
-        //Filter peaks based on minimum amplitude
-        val filteredPeaks = peaks.filter { audioData[it] >= minPeakAmplitude }.toIntArray()
-        return filteredPeaks
+        if (energy < 10000000) {
+            return 0 // Walking
+        } else {
+            return 1 // Running
+        }
     }
 
     private fun plotAudioSignal(plot: XYPlot, audioSignal: DoubleArray, title: String, color: Int) {
