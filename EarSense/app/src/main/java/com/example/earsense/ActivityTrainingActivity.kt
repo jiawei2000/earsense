@@ -96,7 +96,6 @@ class ActivityTrainingActivity : AppCompatActivity() {
         plot = findViewById(R.id.plot)
         plot.graph.marginLeft = 20f
         plot.graph.paddingLeft = 100f
-
 //        plot.graph.marginBottom = 0f
 //        plot.legend.isVisible = false
 

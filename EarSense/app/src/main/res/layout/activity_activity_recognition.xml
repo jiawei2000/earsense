@@ -20,6 +20,18 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0" />
 
+    <ImageView
+        android:id="@+id/imageActivity"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_marginTop="50dp"
+        android:background="@drawable/black_circle"
+        android:padding="30dp"
+        android:src="@drawable/standing"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/materialToolbar" />
+
     <TextView
         android:id="@+id/textPrediction"
         android:layout_width="wrap_content"
@@ -27,66 +39,29 @@
         android:layout_marginTop="20dp"
         android:paddingLeft="5dp"
         android:paddingRight="5dp"
-        android:text="Prediction: X"
+        android:text="Prediction"
         android:textAlignment="center"
-        android:textColor="@color/red"
+        android:textColor="@color/black"
         android:textSize="25sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/materialToolbar" />
+        app:layout_constraintTop_toBottomOf="@id/imageActivity" />
 
     <com.androidplot.xy.XYPlot
-        android:id="@+id/plot1"
+        android:id="@+id/plot"
         style="@style/APDefacto.Light"
         android:layout_width="match_parent"
-        android:layout_height="250dp"
-        android:layout_marginTop="10dp"
+        android:layout_height="300dp"
+        android:layout_marginTop="30dp"
         app:domainTitle=""
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textPrediction"
         app:lineLabelRotationBottom="-45"
-        app:lineLabels="left|bottom"
+        app:lineLabels=""
         app:rangeTitle=""
-        app:title=""
-        />
-
-    <com.androidplot.xy.XYPlot
-        android:id="@+id/plot2"
-        style="@style/APDefacto.Dark"
-        android:layout_width="match_parent"
-        android:layout_height="250dp"
-        android:layout_marginTop="10dp"
-        app:domainTitle=""
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/plot1"
-        app:lineLabelRotationBottom="-45"
-        app:lineLabels="left|bottom"
-        app:rangeTitle=""
-        app:title=""
-        />
-
-    <Button
-        android:id="@+id/buttonTrainModel"
-        android:layout_width="170dp"
-        android:layout_height="75dp"
-        android:text="Train Model"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.1"
-        app:layout_constraintStart_toStartOf="parent" />
-
-    <Button
-        android:id="@+id/buttonDebug"
-        android:layout_width="170dp"
-        android:layout_height="75dp"
-        android:text="Debug"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.9"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:title="" />
 
     <Button
         android:id="@+id/buttonStart"
@@ -94,9 +69,9 @@
         android:layout_height="75dp"
         android:text="Start Listening"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/buttonTrainModel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.1"
+        android:layout_marginBottom="20dp"
         app:layout_constraintStart_toStartOf="parent" />
 
     <Button
@@ -104,9 +79,10 @@
         android:layout_width="170dp"
         android:layout_height="75dp"
         android:text="Stop Listening"
-        app:layout_constraintBottom_toTopOf="@id/buttonDebug"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.9"
+        android:layout_marginBottom="20dp"
         app:layout_constraintStart_toStartOf="parent" />
 
 

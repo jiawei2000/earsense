@@ -105,16 +105,7 @@ class StepTrackerActivity : AppCompatActivity() {
         stopRecording()
     }
 
-//    fun changeIcon(action: String) {
-//        val actionImageView = findViewById<ImageView>(R.id.image)
-//        val iconRes = when (action) {
-//            "walking" -> R.drawable.walking
-//            "running" -> R.drawable.running
-//            "standing" -> R.drawable.standing
-//            else -> return
-//        }
-//        actionImageView.setImageResource(iconRes)
-//    }
+
 
     fun updateStepCount() {
         findViewById<TextView>(R.id.textSteps)?.let { textView ->

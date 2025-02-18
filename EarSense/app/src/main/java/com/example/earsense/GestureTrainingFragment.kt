@@ -20,10 +20,10 @@ import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
+import com.androidplot.xy.XYPlot
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-
 
 class gestureTrainingFragment : Fragment() {
 
@@ -32,14 +32,13 @@ class gestureTrainingFragment : Fragment() {
     val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
     val audioSource = MediaRecorder.AudioSource.MIC
     val bufferSize = AudioRecord.getMinBufferSize(
-        sampleRate,
-        channelConfig,
-        audioEncoding
+        sampleRate, channelConfig, audioEncoding
     )
-    var audioRecord: AudioRecord? = null
-    var waveFormView: WaveFormView? = null
 
+    lateinit var audioRecord: AudioRecord
     lateinit var audioManager: AudioManager
+
+    lateinit var plot: XYPlot
 
     var locationToTap = ""
     var verticalBias = "0.0"
@@ -48,16 +47,16 @@ class gestureTrainingFragment : Fragment() {
     var height = "100"
     var instruction = ""
 
-    var timesToTap: Int? = null
+    var timesToTap = 0
 
-    var textTimer: TextView? = null
-    var textInstructions: TextView? = null
+    lateinit var textTimer: TextView
+    lateinit var textInstructions: TextView
 
-    var countDownTimer: CountDownTimer? = null
-    var currentProfile = ""
+    lateinit var countDownTimer: CountDownTimer
+    lateinit var currentProfile: String
 
-    private lateinit var outputFile: File
-    private lateinit var outputStream: FileOutputStream
+    lateinit var outputFile: File
+    lateinit var outputStream: FileOutputStream
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,32 +76,83 @@ class gestureTrainingFragment : Fragment() {
         }
     }
 
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+    ): View? {
+        // Inflate the layout for this fragment
+        return inflater.inflate(R.layout.fragment_gesture_training, container, false)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        timesToTap = requireContext().resources.getInteger(R.integer.timesToTap)
+
+        // Start Button
+        val buttonStartRecording: Button = view.findViewById(R.id.buttonStart) as Button
+        buttonStartRecording.setOnClickListener {
+            setRecordingDeviceToBluetooth(requireContext())
+            startRecording()
+        }
+
+        // Stop Button
+        val buttonStopRecording: Button = view.findViewById(R.id.buttonStop) as Button
+        buttonStopRecording.setOnClickListener {
+            stopRecording()
+            countDownTimer.cancel()
+            textTimer.text = "Stopped"
+        }
+
+        // Image Circle position and size
+        val imageCircle: ImageView = view.findViewById(R.id.imageCircle)
+        val params = imageCircle.layoutParams as ConstraintLayout.LayoutParams
+        params.verticalBias = verticalBias.toFloat()
+        params.horizontalBias = horizontalBias.toFloat()
+        params.width = width.toInt()
+        params.height = height.toInt()
+        imageCircle.layoutParams = params
+
+        // Plot
+        plot = view.findViewById(R.id.plot)
+        plot.graph.marginLeft = 0f
+        plot.graph.paddingLeft = 0f
+        plot.graph.marginBottom = 0f
+        plot.graph.paddingBottom = 0f
+        plot.legend.isVisible = false
+
+        textTimer = view.findViewById(R.id.textTimer)
+        textInstructions = view.findViewById(R.id.textInstructions)
+
+        // Instructions text
+        textInstructions.text = instruction
+        // Timer text
+        textTimer.text = "Press Start to begin"
+    }
+
+
     private fun startRecording() {
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            return
+        }
+
         // Start recording in a separate thread
         Thread {
             try {
                 // Request permission to record audio
                 if (ActivityCompat.checkSelfPermission(
-                        requireContext(),
-                        android.Manifest.permission.RECORD_AUDIO
+                        requireContext(), android.Manifest.permission.RECORD_AUDIO
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
                     ActivityCompat.requestPermissions(
-                        requireActivity(),
-                        arrayOf(android.Manifest.permission.RECORD_AUDIO),
-                        1
+                        requireActivity(), arrayOf(android.Manifest.permission.RECORD_AUDIO), 1
                     )
                 }
 
                 audioRecord = AudioRecord(
-                    audioSource,
-                    sampleRate,
-                    channelConfig,
-                    audioEncoding,
-                    bufferSize
+                    audioSource, sampleRate, channelConfig, audioEncoding, bufferSize
                 )
 
-                audioRecord?.startRecording()
+                audioRecord.startRecording()
 
                 // Create a directory to store the recorded audio
                 val directory = File(requireContext().filesDir, "$currentProfile/$locationToTap")
@@ -111,8 +161,7 @@ class gestureTrainingFragment : Fragment() {
                 }
 
                 outputFile = File(
-                    requireContext().filesDir,
-                    "$currentProfile/$locationToTap/recorded_audio.pcm"
+                    requireContext().filesDir, "$currentProfile/$locationToTap/recorded_audio.pcm"
                 )
                 // Create the file if it doesn't exist
                 if (!outputFile.exists()) {
@@ -121,13 +170,13 @@ class gestureTrainingFragment : Fragment() {
 
                 outputStream = FileOutputStream(outputFile)
 
-                while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val audioData = ShortArray(bufferSize)
 
-                    val readResult = audioRecord?.read(audioData, 0, audioData.size)
+                    val readResult = audioRecord.read(audioData, 0, audioData.size)
 
-                    if (readResult != null && readResult > 0) {
-                        //TODO add new waveform
+                    if (readResult > 0) {
+                        //TODO add plot
 
                         //Save to file
                         val byteArray = Utils.shortArrayToByteArray(audioData)
@@ -144,16 +193,14 @@ class gestureTrainingFragment : Fragment() {
 
     // Stop recording audio
     private fun stopRecording() {
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-            waveFormView!!.clear()
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            audioRecord.stop()
+            audioRecord.release()
             outputStream.flush()
             outputStream.close()
             audioManager.stopBluetoothSco()
             audioManager.isBluetoothScoOn = false
-        } catch (e: RuntimeException) {
-            e.printStackTrace()
+            plot.clear()
         }
     }
 
@@ -163,17 +210,17 @@ class gestureTrainingFragment : Fragment() {
     }
 
     private fun startCountDownTimer() {
-        countDownTimer = object : CountDownTimer(((timesToTap!! + 1) * 1000).toLong(), 1000) {
+        countDownTimer = object : CountDownTimer(((timesToTap + 1) * 1000).toLong(), 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                textTimer?.text = "" + millisUntilFinished / 1000
+                textTimer.text = "" + millisUntilFinished / 1000
             }
 
             override fun onFinish() {
-                textTimer?.text = "Done"
+                textTimer.text = "Done"
                 stopRecording()
             }
         }
-        countDownTimer?.start()
+        countDownTimer.start()
     }
 
     fun setRecordingDeviceToBluetooth(context: Context) {
@@ -190,55 +237,4 @@ class gestureTrainingFragment : Fragment() {
             }
         }
     }
-
-
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_gesture_training, container, false)
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        timesToTap = requireContext().resources.getInteger(R.integer.timesToTap)
-
-        // Start recording when the button is clicked
-        val buttonStartRecording: Button = view.findViewById(R.id.buttonStart) as Button
-        buttonStartRecording.setOnClickListener {
-            setRecordingDeviceToBluetooth(requireContext())
-            startRecording()
-        }
-
-        // Stop recording when the button is clicked
-        val buttonStopRecording: Button = view.findViewById(R.id.buttonStop) as Button
-        buttonStopRecording.setOnClickListener {
-            stopRecording()
-            countDownTimer?.cancel()
-            textTimer?.text = "Stopped"
-        }
-
-        // Image Circle position and size
-        val imageCircle: ImageView = getView()?.findViewById(R.id.imageCircle) as ImageView
-        val params = imageCircle.layoutParams as ConstraintLayout.LayoutParams
-        params.verticalBias = verticalBias.toFloat()
-        params.horizontalBias = horizontalBias.toFloat()
-        params.width = width.toInt()
-        params.height = height.toInt()
-        imageCircle.layoutParams = params
-
-        // WaveFormView
-        waveFormView = view.findViewById(R.id.waveformView) as WaveFormView
-
-        textTimer = view.findViewById(R.id.textTimer) as TextView
-        textInstructions = view.findViewById(R.id.textInstructions) as TextView
-
-        // Instructions text
-        textInstructions!!.text = instruction
-        // Timer text
-        textTimer!!.text = "Press Start to begin"
-    }
-
 }
