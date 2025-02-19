@@ -64,16 +64,17 @@ class GestureActivity : AppCompatActivity() {
 
     lateinit var imageCircle: ImageView
 
-    val gestures = arrayOf("forehead", "left cheek", "right cheek")
+    val gestures = arrayOf("jaw", "left temple", "right temple")
     val circleLocations = arrayOf(
-        arrayOf(0.28, 0.5, 300, 200),
-        arrayOf(0.83, 0.4, 150, 200),
-        arrayOf(0.83, 0.65, 150, 200)
+        arrayOf(0.99, 0.51, 120, 120),
+        arrayOf(0.33, 0.40, 120, 120),
+        arrayOf(0.33, 0.65, 120, 120)
     )
 
-    lateinit var trainingFeatures: Array<DoubleArray>
-    lateinit var trainingFeaturesOriginal: Array<DoubleArray>
-    lateinit var trainingLabels: IntArray
+    lateinit var signals: Array<DoubleArray>
+    lateinit var fttSignals: Array<DoubleArray>
+    lateinit var lowpassSignals: Array<DoubleArray>
+    val trainingLabels = arrayOf(0,0,0,0,0,1,1,1,1,1,2,2,2,2,2)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,14 +143,10 @@ class GestureActivity : AppCompatActivity() {
 
     fun buttonStart() {
         // Load trainingFeatures
-        trainingFeatures = Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gesture")
-        trainingFeaturesOriginal =
-            Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gestureOriginal")
-        trainingLabels = Utils.readIntArrayFromFile(filesDir, currentProfile, "gesture")
+        signals = Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gestures")
+        lowpassSignals = Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gesturesLowpass")
+        fttSignals = Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gesturesFTT")
 
-        // Log trainingFeatures and trainingLabels
-        Log.d("AAAAAAAA", "Training Features: ${trainingFeatures.size}")
-        Log.d("AAAAAAAA", "Training Labels: ${trainingLabels.size}")
         setRecordingDeviceToBluetooth(this)
         startRecording()
     }
@@ -201,9 +198,9 @@ class GestureActivity : AppCompatActivity() {
                     val readResult = audioRecord.read(audioData, 0, audioData.size)
 
                     if (readResult > 0) {
-                        bufferCount ++
+                        bufferCount++
                         // Clear after no readings for a while
-                        if(bufferCount == 25){
+                        if (bufferCount == 25) {
                             runOnUiThread {
                                 // Display circle
                                 val params =
@@ -286,25 +283,21 @@ class GestureActivity : AppCompatActivity() {
 
                             // Extract the latest peak
                             val latestPeak = listOfPeaks.lastOrNull() ?: continue
-                            val segment = extractSegmentAroundPeak(runningLowPassArray, latestPeak)
+                            val lowpassSignal = extractSegmentAroundPeak(runningLowPassArray, latestPeak)
+                            val signal = extractSegmentAroundPeak(runningAudioArray, latestPeak)
 
-
-                            //Apply FTT to segment
-                            // FFT expects FloatArray
-                            val floatFTTSegment = segment.map { it.toFloat() }.toFloatArray()
+                            //Apply FTT to signal
+                            val floatFTTSegment = signal.map { it.toFloat() }.toFloatArray()
                             val fft = FloatFFT_1D(floatFTTSegment.size.toLong())
                             fft.realForward(floatFTTSegment)
-
-                            // Convert to DoubleArray
-                            val doubleFTTSegment =
-                                floatFTTSegment.map { it.toDouble() }.toDoubleArray()
+                            val fttSignal = floatFTTSegment.map { it.toDouble() }.toDoubleArray()
 
                             // Set buffer count to 0 so wont clear segment
                             bufferCount = 0
 //                          Plot segment
                             runOnUiThread {
                                 plot.clear()
-                                plotAudioSignal(segment, "", Color.RED)
+                                plotAudioSignal(lowpassSignal, "", Color.RED)
                             }
 
 
@@ -316,27 +309,21 @@ class GestureActivity : AppCompatActivity() {
                             // Count which label has the most votes
                             val votes = IntArray(3)
 
-                            // Calculate distance between extracted FTT Segment and all training segments
-                            for (i in 0 until trainingFeatures.size) {
+                            // Calculate distance between extracted FTT signal and all training signals
+                            for (i in 0 until fttSignals.size) {
                                 val eculideanScore =
-                                    Utils.euclideanDistance(doubleFTTSegment, trainingFeatures[i])
+                                    Utils.euclideanDistance(fttSignal, fttSignals[i])
                                 euclideanScores.add(eculideanScore)
 
-                                val cosineScore =
-                                    Utils.cosineSimilarity(doubleFTTSegment, trainingFeatures[i])
+                                val cosineScore = Utils.cosineSimilarity(fttSignal, fttSignals[i])
                                 cosineScores.add(cosineScore)
 
-                                val pearsonCorrelationScore =
-                                    PearsonsCorrelation().correlation(
-                                        doubleFTTSegment,
-                                        trainingFeatures[i]
-                                    )
+                                val pearsonCorrelationScore = PearsonsCorrelation().correlation(fttSignal, fttSignals[i])
                                 pearsonCorrelationScores.add(pearsonCorrelationScore)
                             }
 
 //                            // Sort and log 3 lowest euclidean scores with labels
-                            val sortedIndices =
-                                euclideanScores.indices.sortedBy { euclideanScores[it] }
+                            val sortedIndices = euclideanScores.indices.sortedBy { euclideanScores[it] }
                             for (i in 0 until 3) {
                                 votes[trainingLabels[sortedIndices[i]]]++
                                 val originalIndex = euclideanScores.indexOf(

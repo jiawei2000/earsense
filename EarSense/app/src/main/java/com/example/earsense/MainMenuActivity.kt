@@ -10,6 +10,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
+import java.io.File
 
 class MainMenuActivity : AppCompatActivity() {
 
@@ -19,6 +20,8 @@ class MainMenuActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main_menu)
+
+        val currentProfile = Utils.getCurrentProfile(this)
 
         val toolBar: MaterialToolbar = findViewById(R.id.materialToolbar)
         setSupportActionBar(toolBar)
@@ -52,16 +55,20 @@ class MainMenuActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // Breathing Recognition Button
-        val buttonBreathing: Button = findViewById(R.id.buttonBreathing)
-        buttonBreathing.setOnClickListener {
-            val intent = Intent(this, BreathingActivity::class.java)
+        // Delete Profile Button
+        val buttonDeleteProfile: Button = findViewById(R.id.buttonDeleteProfile)
+        buttonDeleteProfile.setOnClickListener {
+            deleteProfileFolder(currentProfile)
+            deleteProfile(currentProfile)
+            // Go back to the main activity
+            val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
+
         }
 
         // Profile TextView
         profileTextView = findViewById(R.id.textProfile)
-        profileTextView.text = "Current Profile: " + Utils.getCurrentProfile(this)
+        profileTextView.text = "Current Profile: $currentProfile"
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -69,5 +76,38 @@ class MainMenuActivity : AppCompatActivity() {
             insets
         }
     }
+
+    fun deleteProfile(profile: String) {
+        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+        val editor = prefs.edit()
+
+        // Load the existing profiles
+        val profiles = prefs.getStringSet("profiles", setOf())?.toMutableSet() ?: mutableSetOf()
+
+        // Remove the profile
+        if (profiles.contains(profile)) {
+            profiles.remove(profile)
+
+            // Update the profiles list in SharedPreferences
+            editor.putStringSet("profiles", profiles)
+
+            // If the current profile is the one being deleted, set it to null
+            val currentProfile = prefs.getString("currentProfile", null)
+            if (currentProfile == profile) {
+                editor.remove("currentProfile") // Remove the current profile
+            }
+
+            editor.apply() // Apply changes to SharedPreferences
+        }
+    }
+
+    fun deleteProfileFolder(profile: String){
+        val directory = File(filesDir, profile)
+        if (directory.exists()) {
+            // Recursively delete all files and subdirectories
+            directory.deleteRecursively()
+        }
+    }
+
 
 }

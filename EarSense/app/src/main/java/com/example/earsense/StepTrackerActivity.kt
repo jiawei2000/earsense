@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -43,7 +42,6 @@ class StepTrackerActivity : AppCompatActivity() {
     lateinit var audioManager: AudioManager
 
     lateinit var plot: XYPlot
-    lateinit var plot2: XYPlot
 
     var stepCount = 0
 
@@ -90,8 +88,11 @@ class StepTrackerActivity : AppCompatActivity() {
         }
 
         // Plot
-        plot = findViewById(R.id.plot1)
-        plot2 = findViewById(R.id.plot2)
+        plot = findViewById(R.id.plot)
+        plot.graph.marginLeft = 0f
+        plot.graph.paddingLeft = 0f
+        plot.graph.marginBottom = 0f
+        plot.graph.paddingBottom = 0f
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -197,13 +198,7 @@ class StepTrackerActivity : AppCompatActivity() {
                             val doubleFFTAudioData =
                                 floatFFTSegment.map { it.toDouble() }.toDoubleArray()
                             // find index of maximum value
-                            val maxIndex =
-                                doubleFFTAudioData.withIndex().maxByOrNull { it.value }?.index
-
-                            runOnUiThread {
-                                plot2.clear()
-                                plotAudioSignal(plot2, doubleFFTAudioData, "FFT", Color.YELLOW)
-                            }
+                            val maxIndex = doubleFFTAudioData.withIndex().maxByOrNull { it.value }?.index
 
                             if (maxIndex != null && maxIndex > speakingFFTCutoff) {
                                 continue
