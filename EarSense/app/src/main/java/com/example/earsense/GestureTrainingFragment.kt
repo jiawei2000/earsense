@@ -2,6 +2,7 @@ package com.example.earsense
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -9,7 +10,6 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
-import android.os.CountDownTimer
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -20,7 +20,10 @@ import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
+import com.androidplot.xy.BoundaryMode
+import com.androidplot.xy.LineAndPointFormatter
 import com.androidplot.xy.XYPlot
+import com.androidplot.xy.XYSeries
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -52,7 +55,7 @@ class gestureTrainingFragment : Fragment() {
     lateinit var textTimer: TextView
     lateinit var textInstructions: TextView
 
-    lateinit var countDownTimer: CountDownTimer
+    var countDownTimerBuffer = 0
     lateinit var currentProfile: String
 
     lateinit var outputFile: File
@@ -99,7 +102,6 @@ class gestureTrainingFragment : Fragment() {
         val buttonStopRecording: Button = view.findViewById(R.id.buttonStop) as Button
         buttonStopRecording.setOnClickListener {
             stopRecording()
-            countDownTimer.cancel()
             textTimer.text = "Stopped"
         }
 
@@ -128,7 +130,6 @@ class gestureTrainingFragment : Fragment() {
         // Timer text
         textTimer.text = "Press Start to begin"
     }
-
 
     private fun startRecording() {
         if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -170,13 +171,50 @@ class gestureTrainingFragment : Fragment() {
 
                 outputStream = FileOutputStream(outputFile)
 
+                var runningDoubleAudioData = mutableListOf<Double>()
+
+                // 5 Seconds
+                countDownTimerBuffer = (timesToTap + 1) * sampleRate
+
                 while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val audioData = ShortArray(bufferSize)
 
                     val readResult = audioRecord.read(audioData, 0, audioData.size)
 
+                    countDownTimerBuffer -= bufferSize
+                    Log.d ("AAAAAAAAA", countDownTimerBuffer.toString())
+
+                    if (countDownTimerBuffer / sampleRate > 0){
+                        textTimer.post(Runnable {
+                            textTimer.text = (countDownTimerBuffer / sampleRate).toString()
+                        })
+                    }
+
+
+                    if (countDownTimerBuffer <= 0) {
+                        textTimer.post(Runnable {
+                            textTimer.text = "Done"
+                        })
+                        stopRecording()
+                        break
+                    }
+
                     if (readResult > 0) {
-                        //TODO add plot
+                        //Process Audio Data
+                        val doubleAudioArray = audioData.map { it.toDouble() }.toDoubleArray()
+
+                        // Only store 3 seconds of audio data
+                        runningDoubleAudioData.addAll(doubleAudioArray.toList())
+                        if (runningDoubleAudioData.size > sampleRate * 3) {
+                            // Remove oldest buffer size
+                            runningDoubleAudioData = runningDoubleAudioData.drop(bufferSize).toMutableList()
+                        }
+
+                        val runningDoubleAudioArray = runningDoubleAudioData.toDoubleArray()
+
+                        // Update plot
+                        plot.clear()
+                        plotAudioSignal(plot, runningDoubleAudioArray, "", Color.RED)
 
                         //Save to file
                         val byteArray = Utils.shortArrayToByteArray(audioData)
@@ -187,8 +225,6 @@ class gestureTrainingFragment : Fragment() {
                 e.printStackTrace()
             }
         }.start()
-
-        startCountDownTimer()
     }
 
     // Stop recording audio
@@ -209,20 +245,6 @@ class gestureTrainingFragment : Fragment() {
         stopRecording()
     }
 
-    private fun startCountDownTimer() {
-        countDownTimer = object : CountDownTimer(((timesToTap + 1) * 1000).toLong(), 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                textTimer.text = "" + millisUntilFinished / 1000
-            }
-
-            override fun onFinish() {
-                textTimer.text = "Done"
-                stopRecording()
-            }
-        }
-        countDownTimer.start()
-    }
-
     fun setRecordingDeviceToBluetooth(context: Context) {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         for (device in audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
@@ -236,5 +258,59 @@ class gestureTrainingFragment : Fragment() {
                 break
             }
         }
+    }
+
+    private fun plotAudioSignal(plot: XYPlot, audioSignal: DoubleArray, title: String, color: Int) {
+        // Create an XYSeries to hold the data
+        val series: XYSeries = object : XYSeries {
+            override fun size(): Int {
+                return audioSignal.size
+            }
+
+            override fun getX(i: Int): Number {
+                return i // X values will just be the indices of the signal
+            }
+
+            override fun getY(i: Int): Number {
+                return audioSignal[i] // Y values are the actual audio signal values
+            }
+
+            override fun getTitle(): String {
+                return title
+            }
+        }
+
+        // Create a formatter to style the plot (line style, color, etc.)
+        val seriesFormat = LineAndPointFormatter(
+            color,
+            null,
+            null,
+            null
+        )
+
+        // Add the series to the plot
+        plot.addSeries(series, seriesFormat)
+
+        // Adjust the range and domain of the plot
+        // Y-AXIS
+        val minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
+        val maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
+
+        // Add a small buffer around the data to ensure it doesn't touch the axis edges
+        val padding = 0.1 * (maxValue - minValue)  // 10% padding
+        plot.setRangeBoundaries(
+            minValue - padding,
+            maxValue + padding,
+            BoundaryMode.FIXED
+        )
+
+        // X-AXIS
+        plot.setDomainBoundaries(
+            0,
+            audioSignal.size.toFloat(),
+            BoundaryMode.FIXED
+        )
+
+        plot.redraw()
     }
 }

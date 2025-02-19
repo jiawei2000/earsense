@@ -89,7 +89,7 @@
         android:paddingRight="5dp"
         android:text="Prediction: X"
         android:textAlignment="center"
-        android:textColor="@color/red"
+        android:textColor="@color/black"
         android:textSize="25sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
@@ -108,17 +108,18 @@
         app:layout_constraintVertical_bias="0.28" />
 
     <com.androidplot.xy.XYPlot
-        style="@style/APDefacto.Dark"
+        style="@style/APDefacto.Light"
         android:id="@+id/plot"
         android:layout_width="match_parent"
-        android:layout_height="370dp"
+        android:layout_height="300dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textDebug"
-        app:title="Graph"
-        app:rangeTitle="range"
+        app:layout_constraintHorizontal_bias="0.1"
+        app:title=""
+        app:rangeTitle=""
         app:domainTitle=""
-        app:lineLabels="left|bottom"
+        app:lineLabels=""
         app:lineLabelRotationBottom="-45"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

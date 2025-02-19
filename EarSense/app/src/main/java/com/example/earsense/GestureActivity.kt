@@ -51,8 +51,8 @@ class GestureActivity : AppCompatActivity() {
         audioEncoding
     )
 
-    var audioRecord: AudioRecord? = null
-    var audioManager: AudioManager? = null
+    lateinit var audioRecord: AudioRecord
+    lateinit var audioManager: AudioManager
 
     var currentProfile = ""
 
@@ -74,6 +74,7 @@ class GestureActivity : AppCompatActivity() {
     lateinit var knnModel: KNN<DoubleArray>
 
     lateinit var trainingFeatures: Array<DoubleArray>
+    lateinit var trainingFeaturesOriginal: Array<DoubleArray>
     lateinit var trainingLabels: IntArray
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,8 +103,10 @@ class GestureActivity : AppCompatActivity() {
         }
 
         // Debug Button
-        val buttonPlayAudio: Button = findViewById(R.id.buttonDebug)
-        buttonPlayAudio.setOnClickListener {
+        val buttonDebug: Button = findViewById(R.id.buttonDebug)
+        buttonDebug.setOnClickListener {
+            val intent = Intent(this, GesturesDebugActivity::class.java)
+            startActivity(intent)
         }
 
         // Start Button
@@ -115,7 +118,7 @@ class GestureActivity : AppCompatActivity() {
         // Stop Button
         val buttonStop: Button = findViewById(R.id.buttonStop)
         buttonStop.setOnClickListener {
-            buttonStop()
+            stopRecording()
         }
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
@@ -132,45 +135,25 @@ class GestureActivity : AppCompatActivity() {
 
         // Plot
         plot = findViewById(R.id.plot)
-
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        var bluetoothDevice: AudioDeviceInfo? = null
-
-        //Select bluetooth earbuds as audio source
-        for (device in audioManager!!.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
-                bluetoothDevice = device
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    audioManager!!.setCommunicationDevice(bluetoothDevice)
-                } else {
-                    audioManager!!.startBluetoothSco()
-                }
-                audioManager!!.setBluetoothScoOn(true)
-                break
-            }
-        }
-
+        plot.graph.marginLeft = 0f
+        plot.graph.paddingLeft = 0f
+        plot.graph.marginBottom = 0f
+        plot.graph.paddingBottom = 0f
+        plot.legend.isVisible = false
     }
 
     fun buttonStart() {
-        //Load KNN Model
-        knnModel = Utils.loadModelFromFile(currentProfile, filesDir, "gestureModel")!!
-
         // Load trainingFeatures
         trainingFeatures = Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gesture")
+        trainingFeaturesOriginal =
+            Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gestureOriginal")
         trainingLabels = Utils.readIntArrayFromFile(filesDir, currentProfile, "gesture")
 
         // Log trainingFeatures and trainingLabels
         Log.d("AAAAAAAA", "Training Features: ${trainingFeatures.size}")
         Log.d("AAAAAAAA", "Training Labels: ${trainingLabels.size}")
-
+        setRecordingDeviceToBluetooth(this)
         startRecording()
-    }
-
-    fun buttonStop() {
-        stopRecording()
-        // Reset debug text
-        debugTextView.text = "Prediction: X"
     }
 
     override fun onStop() {
@@ -179,6 +162,10 @@ class GestureActivity : AppCompatActivity() {
     }
 
     private fun startRecording() {
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            return
+        }
+
         // Start recording in a separate thread
         Thread {
             try {
@@ -203,24 +190,41 @@ class GestureActivity : AppCompatActivity() {
                     bufferSize
                 )
 
-                audioRecord?.startRecording()
+                audioRecord.startRecording()
 
                 var runningAudioData = mutableListOf<Double>()
                 var runningLowPass = mutableListOf<Double>()
 
-                var predictions = mutableListOf<Int>()
+                var bufferCount = 0
 
-                while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val audioData = ShortArray(bufferSize)
 
-                    val readResult = audioRecord?.read(audioData, 0, audioData.size)
+                    val readResult = audioRecord.read(audioData, 0, audioData.size)
 
-                    if (readResult != null && readResult > 0) {
+                    if (readResult > 0) {
+                        bufferCount ++
+                        // Clear after no readings for a while
+                        if(bufferCount == 25){
+                            runOnUiThread {
+                                // Display circle
+                                val params =
+                                    imageCircle.layoutParams as ConstraintLayout.LayoutParams
+
+                                params.verticalBias = 0f
+                                params.horizontalBias = 0f
+                                params.width = 1
+                                params.height = 1
+
+                                plot.clear()
+                                plot.redraw()
+                                debugTextView.text = "Prediction: X"
+                            }
+                        }
 
                         val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
 
                         //Calculate amplitude
-                        val amplitude = doubleAudioData.maxOrNull() ?: 0.0
                         runningAudioData.addAll(doubleAudioData.toList())
 
                         val lowpassSegment = DoubleArray(doubleAudioData.size)
@@ -238,7 +242,6 @@ class GestureActivity : AppCompatActivity() {
                         }
 
                         runningLowPass.addAll(lowpassSegment.toList())
-
 
                         // If runningAudioData exceeds 3 seconds, remove the oldest bufferSize
                         if (runningAudioData.size > 3 * sampleRate) {
@@ -259,7 +262,6 @@ class GestureActivity : AppCompatActivity() {
                         if (runningLowPassArray.size < 47360) {
                             continue
                         } else {
-
                             // Check if low pass amplitude is above threshold
                             val lowpassMax = runningLowPass.maxOrNull() ?: 0.0
                             val minAmplitude = 800.0
@@ -296,43 +298,21 @@ class GestureActivity : AppCompatActivity() {
                             val fft = FloatFFT_1D(floatFTTSegment.size.toLong())
                             fft.realForward(floatFTTSegment)
 
-
-//                            // Smile KNN Expects DoubleArray
+                            // Convert to DoubleArray
                             val doubleFTTSegment =
                                 floatFTTSegment.map { it.toDouble() }.toDoubleArray()
-//
-                            // Plot segment
+
+                            // Set buffer count to 0 so wont clear segment
+                            bufferCount = 0
+//                          Plot segment
                             runOnUiThread {
                                 plot.clear()
-//                                plotAudioSignal(trainingFeatures[0], "0", Color.WHITE)
-//                                plotAudioSignal(trainingFeatures[1], "1", Color.RED)
-//                                plotAudioSignal(trainingFeatures[2], "2", Color.RED)
-//                                plotAudioSignal(trainingFeatures[3], "3", Color.YELLOW)
-//                                plotAudioSignal(trainingFeatures[4], "4", Color.CYAN)
-//                                plotAudioSignal(trainingFeatures[5], "5", Color.MAGENTA)
-
-//                                plotAudioSignal(trainingFeatures[6], "6", Color.BLUE)
-//                                plotAudioSignal(trainingFeatures[7], "7", Color.CYAN)
-//                                plotAudioSignal(trainingFeatures[8], "8", Color.DKGRAY)
-//                                plotAudioSignal(trainingFeatures[9], "9", Color.LTGRAY)
-//                                plotAudioSignal(trainingFeatures[10], "10", Color.RED)
-//                                plotAudioSignal(trainingFeatures[11], "11", Color.GREEN)
-
-//                                plotAudioSignal(trainingFeatures[12], "12", Color.YELLOW)
-//                                plotAudioSignal(trainingFeatures[13], "13", Color.GREEN)
-//                                plotAudioSignal(trainingFeatures[14], "14", Color.MAGENTA)
-//                                plotAudioSignal(trainingFeatures[15], "15", Color.BLUE)
-//                                plotAudioSignal(trainingFeatures[16], "16", Color.CYAN)
-//                                plotAudioSignal(trainingFeatures[17], "17", Color.DKGRAY)
-
-                                plotAudioSignal(doubleFTTSegment, "Segment", Color.GREEN)
+                                plotAudioSignal(segment, "", Color.RED)
                             }
 
-//                            //Predict using AudioData
-//                            val prediction = knnModel.predict(doubleFTTSegment)
 
                             // Predict using features
-                            val eculdianScores = mutableListOf<Double>()
+                            val euclideanScores = mutableListOf<Double>()
                             val cosineScores = mutableListOf<Double>()
                             val pearsonCorrelationScores = mutableListOf<Double>()
 
@@ -343,7 +323,7 @@ class GestureActivity : AppCompatActivity() {
                             for (i in 0 until trainingFeatures.size) {
                                 val eculideanScore =
                                     Utils.euclideanDistance(doubleFTTSegment, trainingFeatures[i])
-                                eculdianScores.add(eculideanScore)
+                                euclideanScores.add(eculideanScore)
 
                                 val cosineScore =
                                     Utils.cosineSimilarity(doubleFTTSegment, trainingFeatures[i])
@@ -357,21 +337,21 @@ class GestureActivity : AppCompatActivity() {
                                 pearsonCorrelationScores.add(pearsonCorrelationScore)
                             }
 
-                            // Sort and log 5 lowest eculidean scores with labels
+//                            // Sort and log 3 lowest euclidean scores with labels
                             val sortedIndices =
-                                eculdianScores.indices.sortedBy { eculdianScores[it] }
+                                euclideanScores.indices.sortedBy { euclideanScores[it] }
                             for (i in 0 until 3) {
                                 votes[trainingLabels[sortedIndices[i]]]++
-                                val originalIndex = eculdianScores.indexOf(
-                                    eculdianScores[sortedIndices[i]]
+                                val originalIndex = euclideanScores.indexOf(
+                                    euclideanScores[sortedIndices[i]]
                                 )
                                 Log.d(
                                     "AAAAAA",
-                                    "Eculedian: ${eculdianScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}, Original Index: $originalIndex"
+                                    "Eculedian: ${euclideanScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}, Original Index: $originalIndex"
                                 )
                             }
 
-                            // Sort and log highest 5 cosine score
+                            // Sort and log highest 1 cosine score
                             val sortedIndicesCosine =
                                 cosineScores.indices.sortedByDescending { cosineScores[it] }
                             for (i in 0 until 1) {
@@ -384,8 +364,8 @@ class GestureActivity : AppCompatActivity() {
                                     "Cosine: ${cosineScores[sortedIndicesCosine[i]]}, Label: ${trainingLabels[sortedIndicesCosine[i]]} , Original Index: $originalIndex}"
                                 )
                             }
-
-                            // Sort and log highest 5 pearson correlation score
+//
+//                            // Sort and log highest 1 pearson correlation score
                             val sortedIndicesPearson =
                                 pearsonCorrelationScores.indices.sortedByDescending { pearsonCorrelationScores[it] }
                             for (i in 0 until 1) {
@@ -398,6 +378,7 @@ class GestureActivity : AppCompatActivity() {
                                     "Pearson: ${pearsonCorrelationScores[sortedIndicesPearson[i]]}, Label: ${trainingLabels[sortedIndicesPearson[i]]} , Original Index: $originalIndex}"
                                 )
                             }
+
 
                             // Find the label with the most votes
                             val prediction = votes.indexOf(votes.max())
@@ -430,10 +411,13 @@ class GestureActivity : AppCompatActivity() {
     }
 
     fun stopRecording() {
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioManager?.stopBluetoothSco()
-        audioManager?.isBluetoothScoOn = false
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            audioRecord.stop()
+            audioRecord.release()
+            audioManager.stopBluetoothSco()
+            audioManager.isBluetoothScoOn = false
+            plot.clear()
+        }
     }
 
     fun extractSegmentAroundPeak(window: DoubleArray, peakIndex: Int): DoubleArray {
@@ -470,6 +454,21 @@ class GestureActivity : AppCompatActivity() {
         return filteredPeaks
     }
 
+    fun setRecordingDeviceToBluetooth(context: Context) {
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        for (device in audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.setCommunicationDevice(device)
+                } else {
+                    audioManager.startBluetoothSco()
+                }
+                audioManager.setBluetoothScoOn(true)
+                break
+            }
+        }
+    }
+
     private fun plotAudioSignal(audioSignal: DoubleArray, title: String, color: Int) {
         // Step 1: Create an XYSeries to hold the data
         val series: XYSeries = object : XYSeries {
@@ -501,15 +500,10 @@ class GestureActivity : AppCompatActivity() {
         // Step 3: Add the series to the plot
         plot.addSeries(series, seriesFormat)
 
-        // Step 4: Customize plot properties (optional)
-//        plot.title = "Audio Signal Plot"  // Title for the plot
-//        plot.domainLabel = "Time" // Label for the X axis
-//        plot.rangeLabel = "Amplitude" // Label for the Y axis
-
         // Step 5: Adjust the range and domain of the plot
         // Y - AXIS
-        val minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
-        val maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
+        var minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
+        var maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
 
         if (minValue < minGraph) {
             minGraph = minValue
@@ -523,10 +517,10 @@ class GestureActivity : AppCompatActivity() {
 //        val maxValue = 19000
 
 //      Add a small buffer around the data to ensure it doesn't touch the axis edges
-        val padding = 0.1 * (maxGraph - minGraph)  // 10% padding
+        val padding = 0.1 * (maxValue - minValue)  // 10% padding
         plot.setRangeBoundaries(
-            minGraph - padding,
-            maxGraph + padding,
+            minValue - padding,
+            maxValue + padding,
             BoundaryMode.FIXED
         ) // Y-axis range
 
@@ -534,8 +528,8 @@ class GestureActivity : AppCompatActivity() {
         // X - AXIS
         plot.setDomainBoundaries(
             0,
-//            audioSignal.size.toFloat(),
-            500.0,
+            audioSignal.size.toFloat(),
+//            500.0,
             BoundaryMode.FIXED
         ) // Set X-axis range based on the signal size
 

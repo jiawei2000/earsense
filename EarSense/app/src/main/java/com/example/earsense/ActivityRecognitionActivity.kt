@@ -152,9 +152,11 @@ class ActivityRecognitionActivity : AppCompatActivity() {
 
                         runningAudioData.addAll(doubleAudioData.toList())
 
+                        val runningAudioDataArray = runningAudioData.toDoubleArray()
+
                         plot.clear()
                         plotAudioSignal(
-                            plot, doubleAudioData, "", Color.RED
+                            plot, runningAudioDataArray, "", Color.RED
                         )
 
 

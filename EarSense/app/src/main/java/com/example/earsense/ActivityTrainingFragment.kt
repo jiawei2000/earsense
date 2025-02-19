@@ -78,6 +78,7 @@ class ActivityTrainingFragment : Fragment() {
         // Start button
         val startButton: Button = view.findViewById(R.id.buttonStart)
         startButton.setOnClickListener {
+            stopCountDownTimer()
             startCountDownTimer(20)
             setRecordingDeviceToBluetooth(requireContext())
             startRecording()
@@ -127,6 +128,10 @@ class ActivityTrainingFragment : Fragment() {
     }
 
     fun startRecording() {
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            return
+        }
+
         // Start recording in a separate thread
         Thread {
             try {
@@ -177,9 +182,11 @@ class ActivityTrainingFragment : Fragment() {
                             runningDoubleAudioData = runningDoubleAudioData.drop(bufferSize).toMutableList()
                         }
 
+                        val runningAudioDoubleArray = runningDoubleAudioData.toDoubleArray()
+
                         // Update plot
                         plot1.clear()
-                        plotAudioSignal(plot1, runningDoubleAudioData.toDoubleArray(), "", Color.RED)
+                        plotAudioSignal(plot1, runningAudioDoubleArray, "", Color.RED)
 
                         //Save to file
                         val byteArray = Utils.shortArrayToByteArray(audioData)

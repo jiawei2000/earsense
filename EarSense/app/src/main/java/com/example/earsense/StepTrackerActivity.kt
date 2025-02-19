@@ -106,7 +106,6 @@ class StepTrackerActivity : AppCompatActivity() {
     }
 
 
-
     fun updateStepCount() {
         findViewById<TextView>(R.id.textSteps)?.let { textView ->
             if (textView.text.toString() != stepCount.toString()) {
@@ -116,6 +115,10 @@ class StepTrackerActivity : AppCompatActivity() {
     }
 
     fun startRecording() {
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            return
+        }
+
         // Start recording in a separate thread
         Thread {
             try {
@@ -236,7 +239,7 @@ class StepTrackerActivity : AppCompatActivity() {
     }
 
     fun stopRecording() {
-        if (this::audioRecord.isInitialized) {
+        if (this::audioRecord.isInitialized && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
             audioRecord.stop()
             audioRecord.release()
         }
@@ -324,6 +327,5 @@ class StepTrackerActivity : AppCompatActivity() {
 
         plot.redraw()
     }
-
 
 }

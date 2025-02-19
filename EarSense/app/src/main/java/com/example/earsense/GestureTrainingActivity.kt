@@ -1,5 +1,6 @@
 package com.example.earsense
 
+import android.content.Intent
 import android.graphics.Color
 import android.media.AudioFormat
 import android.os.Bundle
@@ -29,7 +30,7 @@ import java.io.FileOutputStream
 import java.io.ObjectOutputStream
 
 class GestureTrainingActivity : AppCompatActivity() {
-    var viewPager: ViewPager2? = null
+    lateinit var viewPager: ViewPager2
 
     // Must match locations in GestureScreenSlidePagerAdapter
     val locations = arrayOf("forehead", "left cheek", "right cheek")
@@ -64,19 +65,19 @@ class GestureTrainingActivity : AppCompatActivity() {
         //ViewPager
         viewPager = findViewById(R.id.viewPager)
         val pageAdapter = GestureScreenSlidePagerAdapter(this)
-        viewPager?.adapter = pageAdapter
-        viewPager?.isUserInputEnabled = false
+        viewPager.adapter = pageAdapter
+        viewPager.isUserInputEnabled = false
 
         //Next button
         val buttonNext: Button = findViewById(R.id.buttonNext)
         buttonNext.setOnClickListener {
-            viewPager?.currentItem = viewPager?.currentItem?.plus(1) ?: 0
+            viewPager.currentItem = viewPager.currentItem.plus(1) ?: 0
         }
 
         //Back button
         val buttonBack: Button = findViewById(R.id.buttonBack)
         buttonBack.setOnClickListener {
-            viewPager?.currentItem = viewPager?.currentItem?.minus(1) ?: 0
+            viewPager.currentItem = viewPager.currentItem.minus(1) ?: 0
         }
 
         // Done button
@@ -86,13 +87,13 @@ class GestureTrainingActivity : AppCompatActivity() {
         }
 
         // Disable back button on first page
-        viewPager?.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 buttonBack.isEnabled = position != 0
             }
         })
         //Disable next button on last page
-        viewPager?.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 buttonNext.isEnabled = position != 3
             }
@@ -110,8 +111,9 @@ class GestureTrainingActivity : AppCompatActivity() {
 
     fun buttonDebug() {
         val trainingFeatures = mutableListOf<DoubleArray>()
+        val trainingFeaturesOriginal =  mutableListOf<DoubleArray>()
         val trainingLabels = mutableListOf<Int>()
-        val eculdianScores = mutableListOf<Double>()
+        val euclideanScores = mutableListOf<Double>()
         val cosineScores = mutableListOf<Double>()
         val pearsonCorrelationScores = mutableListOf<Double>()
 
@@ -124,9 +126,31 @@ class GestureTrainingActivity : AppCompatActivity() {
             val audioData =
                 Utils.readAudioFromFile(audioFile, sampleRate, channelConfig, audioEncoding)
 
+
             //Process Audio Data
             val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
-            val windows = splitIntoWindows(doubleAudioData, sampleRate)
+
+            if (isDebug == 0) {
+                plotAudioSignal(plot, doubleAudioData, "Audio Signal", Color.RED)
+            }
+
+            if (isDebug == 1) {
+                plotAudioSignal(plot, doubleAudioData, "Audio Signal", Color.YELLOW)
+            }
+
+            if (isDebug == 2) {
+                plotAudioSignal(plot, doubleAudioData, "Audio Signal", Color.GREEN)
+            }
+
+            isDebug++
+
+            var windows = splitIntoWindows(doubleAudioData, sampleRate)
+
+            // Drop first and last windows
+            windows = windows.drop(1)
+            windows = windows.dropLast(1)
+
+            Log.d("AAAAAA", "Number of windows: ${windows.size}")
 
             for (window in windows) {
 
@@ -142,6 +166,7 @@ class GestureTrainingActivity : AppCompatActivity() {
                 }
 
                 val extractedSegment = extractSegmentAroundPeak(lowpassSegment)
+                trainingFeaturesOriginal.add(extractedSegment)
 
                 //Apply FTT to segment
                 // FFT expects FloatArray
@@ -152,17 +177,6 @@ class GestureTrainingActivity : AppCompatActivity() {
                 // Add to training features
                 // Smile KNN Expects DoubleArray
                 val doubleSegment = floatSegment.map { it.toDouble() }.toDoubleArray()
-
-                if (isDebug == 3) {
-                    plotAudioSignal(doubleSegment, "ftt", Color.RED)
-                }
-                if (isDebug == 9) {
-                    plotAudioSignal(doubleSegment, "ftt", Color.YELLOW)
-                }
-                if (isDebug == 14) {
-                    plotAudioSignal(doubleSegment, "ftt", Color.GREEN)
-                }
-                isDebug++
 
                 trainingFeatures.add(doubleSegment)
                 trainingLabels.add(locations.indexOf(location))
@@ -175,7 +189,7 @@ class GestureTrainingActivity : AppCompatActivity() {
         // Calculate distance between testSegment and all training segments
         for (i in 0 until trainingFeatures.size) {
             val eculideanScore = Utils.euclideanDistance(testSegment, trainingFeatures[i])
-            eculdianScores.add(eculideanScore)
+            euclideanScores.add(eculideanScore)
 
             val cosineScore = Utils.cosineSimilarity(testSegment, trainingFeatures[i])
             cosineScores.add(cosineScore)
@@ -184,12 +198,12 @@ class GestureTrainingActivity : AppCompatActivity() {
                 PearsonsCorrelation().correlation(testSegment, trainingFeatures[i])
             pearsonCorrelationScores.add(pearsonCorrelationScore)
         }
-        // Sort and log lowest 5 eculedian score
-        val sortedIndices = eculdianScores.indices.sortedBy { eculdianScores[it] }
+        // Sort and log lowest 5 euclidean score
+        val sortedIndices = euclideanScores.indices.sortedBy { euclideanScores[it] }
         for (i in 0 until 5) {
             Log.d(
                 "AAAAAA",
-                "Eculedian: ${eculdianScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}"
+                "Eculedian: ${euclideanScores[sortedIndices[i]]}, Label: ${trainingLabels[sortedIndices[i]]}"
             )
         }
 
@@ -214,10 +228,17 @@ class GestureTrainingActivity : AppCompatActivity() {
 
         // Save the trainingFeatures and trainingLabels to a file
         val featuresArray = trainingFeatures.toTypedArray()
+        val featuresArrayOriginal = trainingFeaturesOriginal.toTypedArray()
         val labelsArray = trainingLabels.toIntArray()
 
         Utils.saveDoubleArrayToFile(featuresArray, filesDir, currentProfile, "gesture")
+        Utils.saveDoubleArrayToFile(featuresArrayOriginal, filesDir, currentProfile, "gestureOriginal")
         Utils.saveIntArrayToFile(labelsArray, filesDir, currentProfile, "gesture")
+
+        // Go to GestureActivity
+        val intent = Intent(this, GestureActivity::class.java)
+        startActivity(intent)
+
 
     }
 
@@ -265,8 +286,8 @@ class GestureTrainingActivity : AppCompatActivity() {
         return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
     }
 
-    private fun plotAudioSignal(audioSignal: DoubleArray, title: String, color: Int) {
-        // Step 1: Create an XYSeries to hold the data
+    private fun plotAudioSignal(plot: XYPlot, audioSignal: DoubleArray, title: String, color: Int) {
+        // Create an XYSeries to hold the data
         val series: XYSeries = object : XYSeries {
             override fun size(): Int {
                 return audioSignal.size
@@ -285,48 +306,40 @@ class GestureTrainingActivity : AppCompatActivity() {
             }
         }
 
-        // Step 2: Create a formatter to style the plot (line style, color, etc.)
+        // Create a formatter to style the plot (line style, color, etc.)
         val seriesFormat = LineAndPointFormatter(
             color,
-            null, // Point color (none in this case)
-            null, // Fill color (none in this case)
-            null  // Background color (none)
+            null,
+            null,
+            null
         )
 
-        // Step 3: Add the series to the plot
+        // Add the series to the plot
         plot.addSeries(series, seriesFormat)
 
-        // Step 4: Customize plot properties (optional)
-//        plot.title = "Audio Signal Plot"  // Title for the plot
-//        plot.domainLabel = "Time" // Label for the X axis
-//        plot.rangeLabel = "Amplitude" // Label for the Y axis
+        // Adjust the range and domain of the plot
+        // Y-AXIS
+        var minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
+        var maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
 
-        // Step 5: Adjust the range and domain of the plot
-        // Y - AXIS
-        val minValue = audioSignal.minOrNull() ?: 0.0  // Get the minimum value in the signal
-        val maxValue = audioSignal.maxOrNull() ?: 0.0  // Get the maximum value in the signal
+//        val minValue = -8000
+//        val maxValue = 10000
 
-//      Add a small buffer around the data to ensure it doesn't touch the axis edges
+        // Add a small buffer around the data to ensure it doesn't touch the axis edges
         val padding = 0.1 * (maxValue - minValue)  // 10% padding
         plot.setRangeBoundaries(
             minValue - padding,
             maxValue + padding,
             BoundaryMode.FIXED
-        ) // Y-axis range
+        )
 
-
-        // X - AXIS
+        // X-AXIS
         plot.setDomainBoundaries(
             0,
             audioSignal.size.toFloat(),
-//            1400.0,
             BoundaryMode.FIXED
-        ) // Set X-axis range based on the signal size
+        )
 
-        // Optional: Customize grid lines, axis labels, etc.
-//        plot.setGridPadding(50, 50, 50, 50) // Set padding around the plot
-
-        // Step 6: Redraw the plot to reflect changes
         plot.redraw()
     }
 }
