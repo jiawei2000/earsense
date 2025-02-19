@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.media.AudioTrack
 import android.util.Log
+import com.github.psambit9791.jdsp.signal.peaks.FindPeak
 import smile.classification.KNN
 import java.io.File
 import java.io.FileInputStream
@@ -235,8 +236,43 @@ class Utils {
                 normSignal1 += signal1[i] * signal1[i]
                 normSignal2 += signal2[i] * signal2[i]
             }
-
             return dotProduct / (Math.sqrt(normSignal1) * Math.sqrt(normSignal2))
+        }
+
+        @JvmStatic
+        fun findPeaks(audioData: DoubleArray, minPeakAmplitude: Double): IntArray {
+            val fp = FindPeak(audioData)
+
+            // Detect peaks
+            val peaks = fp.detectPeaks().peaks
+
+            //Filter peaks based on minimum amplitude
+            val filteredPeaks = peaks.filter { audioData[it] >= minPeakAmplitude }.toIntArray()
+            return filteredPeaks
+        }
+
+        @JvmStatic
+        fun extractSegmentAroundPeak(segment: DoubleArray, peakIndex: Int, sampleRate: Int): DoubleArray {
+            val segmentDuration = 0.4
+            val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
+
+            // Calculate segment start and end
+            // extract 0.15 seconds before and 0.25 seconds after the peak
+            var start = peakIndex - (0.15 * sampleRate).toInt()
+            var end = peakIndex + (0.25 * sampleRate).toInt()
+
+            // Handle out-of-bounds cases
+            if (start < 0) {
+                end -= start // Extend end
+                start = 0
+            }
+            if (end > segment.size) {
+                start -= (end - segment.size) // Extend start
+                end = segment.size
+            }
+
+            // Extract the segment
+            return segment.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(segment.size))
         }
 
     }

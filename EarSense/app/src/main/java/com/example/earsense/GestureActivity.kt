@@ -71,8 +71,6 @@ class GestureActivity : AppCompatActivity() {
         arrayOf(0.83, 0.65, 150, 200)
     )
 
-    lateinit var knnModel: KNN<DoubleArray>
-
     lateinit var trainingFeatures: Array<DoubleArray>
     lateinit var trainingFeaturesOriginal: Array<DoubleArray>
     lateinit var trainingLabels: IntArray
@@ -98,7 +96,7 @@ class GestureActivity : AppCompatActivity() {
         // Train Model Button
         val buttonTrainModel: Button = findViewById(R.id.buttonTrainModel)
         buttonTrainModel.setOnClickListener {
-            val intent = Intent(this, GestureTrainingActivity::class.java)
+            val intent = Intent(this, NewGestureTrainingActivity::class.java)
             startActivity(intent)
         }
 
@@ -224,7 +222,6 @@ class GestureActivity : AppCompatActivity() {
 
                         val doubleAudioData = audioData.map { it.toDouble() }.toDoubleArray()
 
-                        //Calculate amplitude
                         runningAudioData.addAll(doubleAudioData.toList())
 
                         val lowpassSegment = DoubleArray(doubleAudioData.size)
@@ -420,7 +417,7 @@ class GestureActivity : AppCompatActivity() {
         }
     }
 
-    fun extractSegmentAroundPeak(window: DoubleArray, peakIndex: Int): DoubleArray {
+    fun extractSegmentAroundPeak(segment: DoubleArray, peakIndex: Int): DoubleArray {
         val segmentDuration = 0.4
         val segmentSize = (segmentDuration * sampleRate).toInt() // Number of samples in 0.4 seconds
 
@@ -434,13 +431,13 @@ class GestureActivity : AppCompatActivity() {
             end -= start // Extend end
             start = 0
         }
-        if (end > window.size) {
-            start -= (end - window.size) // Extend start
-            end = window.size
+        if (end > segment.size) {
+            start -= (end - segment.size) // Extend start
+            end = segment.size
         }
 
         // Extract the segment
-        return window.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(window.size))
+        return segment.copyOfRange(start.coerceAtLeast(0), end.coerceAtMost(segment.size))
     }
 
     fun findPeaks(audioData: DoubleArray, minPeakAmplitude: Double): IntArray {

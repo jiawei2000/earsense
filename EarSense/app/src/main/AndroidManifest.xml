@@ -18,6 +18,9 @@
         android:theme="@style/Theme.EarSense"
         tools:targetApi="33">
         <activity
+            android:name=".NewGestureTrainingActivity"
+            android:exported="false" />
+        <activity
             android:name=".GesturesDebugActivity"
             android:exported="false" />
         <activity
