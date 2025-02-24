@@ -71,14 +71,14 @@ class GesturesDebugActivity : AppCompatActivity() {
         val currentProfile = Utils.getCurrentProfile(this)
 
         val trainingFeaturesOriginal =
-            Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gestureOriginal")
+            Utils.readDoubleArrayFromFile(filesDir, currentProfile, "gestures")
 
         val trainingLabels = Utils.readIntArrayFromFile(filesDir, currentProfile, "gesture")
 
 
         Log.d("GesturesDebugActivity", "Training Labels: ${trainingLabels.toList()}")
 
-        if (trainingFeaturesOriginal.size < 12) {
+        if (trainingFeaturesOriginal.size < 9) {
             Log.d(
                 "GesturesDebugActivity",
                 "Not enough training features: ${trainingFeaturesOriginal.size}"
@@ -92,12 +92,12 @@ class GesturesDebugActivity : AppCompatActivity() {
                 plotAudioSignal(plot1, trainingFeature, "", Color.RED)
             }
 
-            for (i in 5 until 8) {
+            for (i in 5 until 10) {
                 val trainingFeature = trainingFeaturesOriginal[i]
                 plotAudioSignal(plot2, trainingFeature, "", Color.RED)
             }
 
-            for (i in 8 until 12) {
+            for (i in 10 until 15) {
                 val trainingFeature = trainingFeaturesOriginal[i]
                 plotAudioSignal(plot3, trainingFeature, "", Color.RED)
             }

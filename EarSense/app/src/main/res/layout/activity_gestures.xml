@@ -98,8 +98,8 @@
 
     <ImageView
         android:id="@+id/imageCircle"
-        android:layout_width="130sp"
-        android:layout_height="60sp"
+        android:layout_width="1sp"
+        android:layout_height="1sp"
         android:src="@drawable/red_circle"
         app:layout_constraintBottom_toBottomOf="@id/imageView"
         app:layout_constraintEnd_toEndOf="parent"
